@@ -1,0 +1,189 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String            @id @default(uuid())
+  name             String
+  email            String            @unique
+  passwordHash     String
+  avatarUrl        String?
+  createdAt        DateTime          @default(now())
+  sessions         Session[]
+  workspaceMembers WorkspaceMember[]
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+}
+
+model Workspace {
+  id        String            @id @default(uuid())
+  name      String
+  slug      String            @unique
+  ownerId   String
+  createdAt DateTime          @default(now())
+  members   WorkspaceMember[]
+  projects  Project[]
+  AuditLog  AuditLog[]
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  role        String
+  joinedAt    DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+}
+
+model Project {
+  id           String             @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  slug         String
+  framework    String?
+  sourceType   String
+  createdAt    DateTime           @default(now())
+  connections  RepositoryConnection[]
+  snapshots    SourceSnapshot[]
+  scans        Scan[]
+  findings     Finding[]
+
+  @@unique([workspaceId, slug])
+}
+
+model RepositoryConnection {
+  id             String  @id @default(uuid())
+  projectId      String
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  installationId String
+  providerRepoId String
+  owner          String
+  repo           String
+  defaultBranch  String
+}
+
+model SourceSnapshot {
+  id          String   @id @default(uuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  commitSha   String?
+  storageKey  String
+  contentHash String
+  sizeBytes   Int
+  createdAt   DateTime @default(now())
+  scans       Scan[]
+}
+
+model Scan {
+  id            String             @id @default(uuid())
+  projectId     String
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snapshotId    String
+  snapshot      SourceSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  status        String
+  profile       String
+  progress      Int                @default(0)
+  startedAt     DateTime?
+  completedAt   DateTime?
+  executions    ScannerExecution[]
+  occurrences   FindingOccurrence[]
+  reports       Report[]
+}
+
+model ScannerExecution {
+  id            String   @id @default(uuid())
+  scanId        String
+  scan          Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  engine        String
+  version       String
+  status        String
+  findingsCount Int      @default(0)
+  durationMs    Int?
+  errorCode     String?
+
+  @@unique([scanId, engine])
+}
+
+model Finding {
+  id              String             @id @default(uuid())
+  projectId       String
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fingerprint     String
+  firstSeenScanId String
+  lastSeenScanId  String
+  status          String
+  occurrences     FindingOccurrence[]
+  reviews         FindingReview[]
+  remediations    Remediation[]
+
+  @@unique([projectId, fingerprint])
+}
+
+model FindingOccurrence {
+  id         String  @id @default(uuid())
+  findingId  String
+  finding    Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  scanId     String
+  scan       Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  ruleId     String
+  severity   String
+  filePath   String?
+  startLine  Int?
+  evidence   String?
+}
+
+model Remediation {
+  id          String   @id @default(uuid())
+  findingId   String
+  finding     Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  explanation String
+  fixPrompt   String
+  model       String
+  generatedAt DateTime @default(now())
+}
+
+model FindingReview {
+  id         String   @id @default(uuid())
+  findingId  String
+  finding    Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  reviewerId String
+  decision   String
+  reason     String?
+  createdAt  DateTime @default(now())
+}
+
+model Report {
+  id          String   @id @default(uuid())
+  scanId      String
+  scan        Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  format      String
+  storageKey  String
+  generatedAt DateTime @default(now())
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actorId     String
+  action      String
+  targetId    String?
+  metadata    String?
+  timestamp   DateTime  @default(now())
+}

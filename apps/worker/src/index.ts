@@ -1,5 +1,5 @@
 import { Worker, Job } from 'bullmq';
-import { PrismaClient } from '@vibeshield/database';
+import { PrismaClient } from '@prisma/client';
 import IORedis from 'ioredis';
 import * as dotenv from 'dotenv';
 import { SemgrepAdapter } from './scanners/semgrep.adapter';

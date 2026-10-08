@@ -1,0 +1,96 @@
+# Environment variables
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+!.env.*.example
+
+plan-docs/
+.agents/
+.skills/
+
+# Node/npm
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# Python/backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+backend/lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.nyc_output/
+coverage/
+.mocha/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Alembic
+alembic/versions/__pycache__/
+
+# Redis/Celery
+celerybeat-schedule
+dump.rdb
+
+# Frontend build artifacts
+.turbo/
+
+# E2E tests
+test-results/
+playwright-report/
+
+# Misc
+.cache/

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@vibeshield/database';
+import { PrismaClient } from '@prisma/client';
 import { NormalizedFinding } from '../scanners/adapter.interface';
 
 export class ScanNormalizer {

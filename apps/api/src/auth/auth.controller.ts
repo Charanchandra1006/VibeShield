@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Res, Req, Get, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service.js';
-import { Response, Request } from 'express';
+import type { Response, Request } from 'express';
 import { z } from 'zod';
 import { UsersService } from '../users/users.service.js';
 

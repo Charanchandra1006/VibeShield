@@ -1,5 +1,5 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
-import { AIService, AIRequest } from './ai.service.js';
+import { AIService, type AIRequest } from './ai.service.js';
 import { AuthGuard } from '../auth/auth.guard.js';
 
 @Controller('ai')

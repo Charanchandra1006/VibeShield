@@ -3,7 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ProjectsService } from './projects.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 import { AuthGuard } from '../auth/auth.guard.js';
-import { Request } from 'express';
+import type { Request } from 'express';
 import { z } from 'zod';
 
 const CreateProjectDto = z.object({
@@ -52,7 +52,7 @@ export class ProjectsController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadSnapshot(
     @Param('id') id: string,
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: any,
     @Req() req: any
   ) {
     if (!file) throw new BadRequestException('No file uploaded');

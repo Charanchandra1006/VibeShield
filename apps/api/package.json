@@ -36,7 +36,8 @@
     "rxjs": "^7.8.1",
     "zod": "^3.23.8",
     "@vibeshield/database": "workspace:*",
-    "@vibeshield/contracts": "workspace:*"
+    "@vibeshield/contracts": "workspace:*",
+    "@prisma/client": "^6.4.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^12.0.0",

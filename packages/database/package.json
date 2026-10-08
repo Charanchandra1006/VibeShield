@@ -1,7 +1,8 @@
 {
   "name": "@vibeshield/database",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.ts",
+  "types": "index.ts",
   "scripts": {
     "db:push": "prisma db push",
     "db:generate": "prisma generate"

@@ -3,20 +3,30 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, ShieldAlert, Shield, ShieldCheck, ChevronRight } from "lucide-react";
+import { Search, Filter, ShieldAlert, Shield, ShieldCheck, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
-
-const mockFindings = [
-  { id: "1", title: "Potential SQL Injection", category: "Code", severity: "High", file: "src/db/query.js:42", status: "Open", date: "2 mins ago" },
-  { id: "2", title: "Hardcoded AWS Access Token", category: "Secret", severity: "Critical", file: "config/aws.json:3", status: "Open", date: "2 mins ago" },
-  { id: "3", title: "Prototype Pollution in lodash", category: "Dependency", severity: "High", file: "package.json", status: "Open", date: "2 mins ago" },
-  { id: "4", title: "DangerouslyAllowSVG Enabled", category: "Config", severity: "Medium", file: "next.config.js", status: "Reviewed", date: "1 day ago" },
-];
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from "@/lib/api";
 
 export default function FindingsListPage() {
   const params = useParams();
+
+  const { data: findings, isLoading } = useQuery({
+    queryKey: ['projects', params.projectId, 'findings'],
+    queryFn: () => apiFetch(`/projects/${params.projectId}/findings`).then(res => res.data),
+  });
+
+  const getSeverityCounts = () => {
+    if (!findings) return { Critical: 0, High: 0, Medium: 0, Low: 0 };
+    return findings.reduce((acc: any, curr: any) => {
+      const sev = curr.occurrences?.[0]?.severity || 'Low';
+      acc[sev] = (acc[sev] || 0) + 1;
+      return acc;
+    }, { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 });
+  };
+  const counts = getSeverityCounts();
 
   return (
     <div className="space-y-6">
@@ -31,11 +41,16 @@ export default function FindingsListPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4 mb-6">
-        {['Critical', 'High', 'Medium', 'Low'].map((sev, i) => (
-          <Card key={sev} className="border-border bg-card/30">
+        {[
+          { label: 'Critical', val: counts.CRITICAL },
+          { label: 'High', val: counts.HIGH },
+          { label: 'Medium', val: counts.MEDIUM },
+          { label: 'Low', val: counts.LOW }
+        ].map((sev, i) => (
+          <Card key={sev.label} className="border-border bg-card/30">
             <CardContent className="p-4 flex items-center justify-between">
-              <span className="font-medium text-sm text-muted-foreground">{sev}</span>
-              <span className="text-2xl font-bold">{i === 0 ? 1 : i === 1 ? 2 : i === 2 ? 1 : 0}</span>
+              <span className="font-medium text-sm text-muted-foreground">{sev.label}</span>
+              <span className="text-2xl font-bold">{sev.val}</span>
             </CardContent>
           </Card>
         ))}
@@ -62,7 +77,21 @@ export default function FindingsListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {mockFindings.map((finding, i) => (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                    </td>
+                  </tr>
+                ) : findings?.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                      No security findings discovered yet! Keep up the good work.
+                    </td>
+                  </tr>
+                ) : findings?.map((finding: any, i: number) => {
+                  const occurrence = finding.occurrences?.[0] || {};
+                  return (
                   <motion.tr 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -71,15 +100,16 @@ export default function FindingsListPage() {
                     className="hover:bg-muted/10 transition-colors group cursor-pointer"
                   >
                     <td className="px-6 py-4">
-                      {finding.severity === 'Critical' && <span className="flex items-center gap-1.5 text-destructive font-bold text-xs"><ShieldAlert className="w-4 h-4" /> CRITICAL</span>}
-                      {finding.severity === 'High' && <span className="flex items-center gap-1.5 text-orange-500 font-bold text-xs"><ShieldAlert className="w-4 h-4" /> HIGH</span>}
-                      {finding.severity === 'Medium' && <span className="flex items-center gap-1.5 text-yellow-500 font-bold text-xs"><Shield className="w-4 h-4" /> MEDIUM</span>}
+                      {occurrence.severity === 'CRITICAL' && <span className="flex items-center gap-1.5 text-destructive font-bold text-xs"><ShieldAlert className="w-4 h-4" /> CRITICAL</span>}
+                      {occurrence.severity === 'HIGH' && <span className="flex items-center gap-1.5 text-orange-500 font-bold text-xs"><ShieldAlert className="w-4 h-4" /> HIGH</span>}
+                      {occurrence.severity === 'MEDIUM' && <span className="flex items-center gap-1.5 text-yellow-500 font-bold text-xs"><Shield className="w-4 h-4" /> MEDIUM</span>}
+                      {occurrence.severity === 'LOW' && <span className="flex items-center gap-1.5 text-blue-500 font-bold text-xs"><Shield className="w-4 h-4" /> LOW</span>}
                     </td>
-                    <td className="px-6 py-4 font-medium text-foreground">{finding.title}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{finding.category}</td>
-                    <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{finding.file}</td>
+                    <td className="px-6 py-4 font-medium text-foreground">{finding.fingerprint.substring(0, 12)}...</td>
+                    <td className="px-6 py-4 text-muted-foreground">{occurrence.ruleId}</td>
+                    <td className="px-6 py-4 font-mono text-xs text-muted-foreground">{occurrence.filePath}:{occurrence.startLine}</td>
                     <td className="px-6 py-4">
-                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${finding.status === 'Open' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                      <span className={`px-2 py-1 rounded-md text-xs font-medium ${finding.status === 'OPEN' ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
                         {finding.status}
                       </span>
                     </td>
@@ -91,7 +121,7 @@ export default function FindingsListPage() {
                       </Link>
                     </td>
                   </motion.tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>

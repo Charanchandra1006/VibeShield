@@ -41,4 +41,15 @@ export class ProjectsService {
     if (!project) throw new NotFoundException('Project not found');
     return project;
   }
+
+  async getFindings(projectId: string, workspaceId: string) {
+    await this.findById(projectId, workspaceId);
+    return this.prisma.finding.findMany({
+      where: { projectId },
+      include: {
+        occurrences: true
+      },
+      orderBy: { status: 'desc' }
+    });
+  }
 }

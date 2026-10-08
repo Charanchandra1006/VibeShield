@@ -7,15 +7,53 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Github, UploadCloud, CheckCircle2, ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/api";
 
 export default function NewProjectPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [sourceType, setSourceType] = useState<"GITHUB" | "ZIP" | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [projectName, setProjectName] = useState('vibeshield-demo-app');
 
-  const handleNext = () => {
-    if (step < 3) setStep(step + 1);
-    else router.push("/projects/mock-id/findings"); // Mock redirect
+  const handleNext = async () => {
+    if (step < 3) {
+      setStep(step + 1);
+    } else {
+      setLoading(true);
+      try {
+        // Create project
+        const projRes = await apiFetch('/projects', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: projectName,
+            sourceType,
+            framework: 'Next.js'
+          })
+        });
+
+        // Mock upload zip file (using a blob instead of actual file for MVP demo)
+        const formData = new FormData();
+        formData.append('file', new Blob(['mock-zip-content'], { type: 'application/zip' }), 'source.zip');
+        
+        await apiFetch(`/projects/${projRes.data.id}/uploads`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        // Start scan
+        await apiFetch(`/projects/${projRes.data.id}/scans`, {
+          method: 'POST',
+          body: JSON.stringify({ profile: 'Comprehensive' })
+        });
+
+        router.push(`/projects`);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   return (
@@ -79,7 +117,7 @@ export default function NewProjectPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Project Name</label>
-                  <Input defaultValue="vibeshield-demo-app" className="bg-background/50" />
+                  <Input value={projectName} onChange={e => setProjectName(e.target.value)} className="bg-background/50" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Detected Framework</label>
@@ -128,11 +166,11 @@ export default function NewProjectPage() {
           )}
 
           <CardFooter className="flex justify-between border-t border-border pt-6">
-            <Button variant="ghost" onClick={() => setStep(step - 1)} disabled={step === 1}>
+            <Button variant="ghost" onClick={() => setStep(step - 1)} disabled={step === 1 || loading}>
               Back
             </Button>
-            <Button onClick={handleNext} disabled={step === 1 && !sourceType} className="gap-2">
-              {step === 3 ? "Start Security Scan" : "Continue"} <ArrowRight className="w-4 h-4" />
+            <Button onClick={handleNext} disabled={(step === 1 && !sourceType) || loading} className="gap-2">
+              {loading ? "Starting..." : step === 3 ? "Start Security Scan" : "Continue"} <ArrowRight className="w-4 h-4" />
             </Button>
           </CardFooter>
         </Card>

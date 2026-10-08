@@ -3,17 +3,17 @@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, GitBranch, ShieldAlert, ShieldCheck, MoreVertical } from "lucide-react";
+import { Search, Plus, GitBranch, ShieldAlert, ShieldCheck, MoreVertical, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-
-const mockProjects = [
-  { id: "1", name: "vibeshield-api", framework: "NestJS", type: "GitHub", lastScan: "2 hours ago", status: "Critical", criticalCount: 2, highCount: 5 },
-  { id: "2", name: "frontend-client", framework: "Next.js", type: "GitHub", lastScan: "1 day ago", status: "Clear", criticalCount: 0, highCount: 0 },
-  { id: "3", name: "legacy-payment-service", framework: "Express", type: "ZIP", lastScan: "3 days ago", status: "Warning", criticalCount: 0, highCount: 8 },
-];
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from "@/lib/api";
 
 export default function ProjectsPage() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => apiFetch('/projects').then(res => res.data),
+  });
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -48,7 +48,19 @@ export default function ProjectsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {mockProjects.map((project, i) => (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                      <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                    </td>
+                  </tr>
+                ) : data?.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
+                      No projects found. Add your first project.
+                    </td>
+                  </tr>
+                ) : data?.map((project: any, i: number) => (
                   <motion.tr 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -58,28 +70,27 @@ export default function ProjectsPage() {
                   >
                     <td className="px-6 py-4">
                       <div className="font-medium text-foreground">{project.name}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{project.framework}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{project.framework || 'Unknown framework'}</div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5 text-muted-foreground">
-                        <GitBranch className="w-4 h-4" /> {project.type}
+                        <GitBranch className="w-4 h-4" /> {project.sourceType}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-muted-foreground">{project.lastScan}</td>
+                    <td className="px-6 py-4 text-muted-foreground">
+                      {project.scans?.[0]?.createdAt ? new Date(project.scans[0].createdAt).toLocaleDateString() : 'Never'}
+                    </td>
                     <td className="px-6 py-4">
-                      {project.status === "Clear" ? (
+                      {project.scans?.[0]?.status === "COMPLETED" ? (
                         <div className="flex items-center gap-1.5 text-green-500">
-                          <ShieldCheck className="w-4 h-4" /> 0 issues
+                          <ShieldCheck className="w-4 h-4" /> Scanned
+                        </div>
+                      ) : project.scans?.[0] ? (
+                        <div className="flex items-center gap-1.5 text-yellow-500 text-xs font-bold bg-yellow-500/10 px-2 py-0.5 rounded-full w-fit">
+                          {project.scans[0].status}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center gap-1 text-destructive text-xs font-bold bg-destructive/10 px-2 py-0.5 rounded-full">
-                            <ShieldAlert className="w-3 h-3" /> {project.criticalCount} Critical
-                          </span>
-                          <span className="flex items-center gap-1 text-orange-500 text-xs font-bold bg-orange-500/10 px-2 py-0.5 rounded-full">
-                            {project.highCount} High
-                          </span>
-                        </div>
+                        <div className="text-muted-foreground">No scans</div>
                       )}
                     </td>
                     <td className="px-6 py-4 text-right">

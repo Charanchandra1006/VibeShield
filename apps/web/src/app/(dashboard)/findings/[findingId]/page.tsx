@@ -3,13 +3,24 @@
 import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, Terminal, AlertTriangle, Sparkles, CheckCircle2 } from "lucide-react";
+import { ShieldAlert, Terminal, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from "@/lib/api";
 
 export default function FindingDetailPage() {
   const params = useParams();
   const [activeTab, setActiveTab] = useState('overview');
+
+  const { data: aiExplanation, isLoading: isAILoading } = useQuery({
+    queryKey: ['ai', 'explain', params.findingId],
+    queryFn: () => apiFetch('/ai/explain', {
+      method: 'POST',
+      body: JSON.stringify({ findingId: params.findingId })
+    }).then(res => res.data),
+    enabled: activeTab === 'fix' || activeTab === 'overview', // Fetch when these tabs are open
+  });
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -63,9 +74,17 @@ export default function FindingDetailPage() {
                   <CardTitle className="text-lg">What was detected</CardTitle>
                 </CardHeader>
                 <CardContent className="text-muted-foreground leading-relaxed">
-                  A hardcoded AWS Access Token was found in your repository. This credential can be used by an attacker to authenticate to AWS APIs, potentially allowing them to access, modify, or delete your cloud infrastructure and data. 
-                  <br/><br/>
-                  To protect your system, the credential value has been redacted from our logs and databases.
+                  {isAILoading ? (
+                    <div className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Generating AI summary...</div>
+                  ) : aiExplanation ? (
+                    <>
+                      {aiExplanation.summary}
+                      <br/><br/>
+                      {aiExplanation.explanation}
+                    </>
+                  ) : (
+                    "Loading summary..."
+                  )}
                 </CardContent>
               </Card>
               
@@ -133,19 +152,24 @@ export default function FindingDetailPage() {
               </CardHeader>
               <CardContent className="space-y-4 relative z-10">
                 <p className="text-muted-foreground">To resolve this safely, follow these steps:</p>
-                <ol className="list-decimal pl-5 space-y-2 text-sm text-foreground">
-                  <li><strong>Revoke</strong> the exposed key in AWS IAM immediately.</li>
-                  <li><strong>Replace</strong> the hardcoded values with environment variables in your code.</li>
-                  <li><strong>Remove</strong> the secret from your git history using tools like BFG Repo-Cleaner or git filter-repo if necessary.</li>
-                </ol>
-                <div className="mt-4 p-4 rounded-md bg-black/40 font-mono text-xs border border-border">
-                  <span className="text-gray-500">{"// Updated config/aws.json or config.js"}</span><br/>
-                  {"{"}<br/>
-                  &nbsp;&nbsp;"region": process.env.AWS_REGION,<br/>
-                  &nbsp;&nbsp;"accessKeyId": process.env.AWS_ACCESS_KEY_ID,<br/>
-                  &nbsp;&nbsp;"secretAccessKey": process.env.AWS_SECRET_ACCESS_KEY<br/>
-                  {"}"}
-                </div>
+                {isAILoading ? (
+                  <div className="flex items-center gap-2 p-4 text-sm"><Loader2 className="w-4 h-4 animate-spin"/> Generating remediation plan...</div>
+                ) : aiExplanation ? (
+                  <>
+                    <ol className="list-decimal pl-5 space-y-2 text-sm text-foreground">
+                      {aiExplanation.fixSteps.map((step: string, i: number) => (
+                        <li key={i} dangerouslySetInnerHTML={{ __html: step }} />
+                      ))}
+                    </ol>
+                    {aiExplanation.safeCodeExample && (
+                      <div className="mt-4 p-4 rounded-md bg-black/40 font-mono text-xs border border-border overflow-x-auto whitespace-pre">
+                        {aiExplanation.safeCodeExample}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p>Failed to load remediation plan.</p>
+                )}
               </CardContent>
             </Card>
           </div>

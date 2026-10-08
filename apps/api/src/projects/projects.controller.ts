@@ -42,6 +42,12 @@ export class ProjectsController {
     return { success: true, data: project };
   }
 
+  @Get(':id/findings')
+  async getFindings(@Param('id') id: string, @Req() req: any) {
+    const findings = await this.projectsService.getFindings(id, req.user.workspaceId);
+    return { success: true, data: findings };
+  }
+
   @Post(':id/uploads')
   @UseInterceptors(FileInterceptor('file'))
   async uploadSnapshot(

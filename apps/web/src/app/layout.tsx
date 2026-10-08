@@ -7,6 +7,8 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
+import Providers from "./providers";
+
 export const metadata: Metadata = {
   title: "VibeShield | AI Application Security Platform",
   description: "Detect, explain, prioritize, and remediate vulnerabilities in your applications.",
@@ -20,7 +22,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="min-h-screen bg-background font-sans antialiased text-foreground">
-        {children}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

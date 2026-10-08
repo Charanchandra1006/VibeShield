@@ -7,15 +7,34 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Shield } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { apiFetch } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // TODO: Connect to backend API
-    setTimeout(() => setLoading(false), 1000);
+    setError(null);
+    const form = e.target as HTMLFormElement;
+    
+    try {
+      await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: form.email.value,
+          password: form.password.value,
+        })
+      });
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -50,7 +69,7 @@ export default function LoginPage() {
                 <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70" htmlFor="email">
                   Email
                 </label>
-                <Input id="email" type="email" placeholder="m@example.com" required className="bg-background/50" />
+                <Input id="email" name="email" type="email" placeholder="m@example.com" required className="bg-background/50" />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -61,8 +80,9 @@ export default function LoginPage() {
                     Forgot password?
                   </Link>
                 </div>
-                <Input id="password" type="password" required className="bg-background/50" />
+                <Input id="password" name="password" type="password" required className="bg-background/50" />
               </div>
+              {error && <div className="text-sm text-destructive font-medium">{error}</div>}
               <Button type="submit" className="w-full mt-2" disabled={loading}>
                 {loading ? "Signing in..." : "Sign In"}
               </Button>

@@ -10,7 +10,6 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {
-    "@prisma/client": "^6.4.1",
     "bullmq": "^5.14.0",
     "dotenv": "^16.4.5",
     "ioredis": "^5.4.1"

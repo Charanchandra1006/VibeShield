@@ -14,6 +14,7 @@ export default function NewProjectPage() {
   const [step, setStep] = useState(1);
   const [sourceType, setSourceType] = useState<"GITHUB" | "ZIP" | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [projectName, setProjectName] = useState('vibeshield-demo-app');
 
   const handleNext = async () => {
@@ -22,6 +23,7 @@ export default function NewProjectPage() {
     } else {
       setLoading(true);
       try {
+        setError(null);
         // Create project
         const projRes = await apiFetch('/projects', {
           method: 'POST',
@@ -32,10 +34,9 @@ export default function NewProjectPage() {
           })
         });
 
-        // Mock upload zip file (using a blob instead of actual file for MVP demo)
+        // Upload a placeholder zip
         const formData = new FormData();
         formData.append('file', new Blob(['mock-zip-content'], { type: 'application/zip' }), 'source.zip');
-        
         await apiFetch(`/projects/${projRes.data.id}/uploads`, {
           method: 'POST',
           body: formData,
@@ -48,8 +49,9 @@ export default function NewProjectPage() {
         });
 
         router.push(`/projects`);
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
+        setError(e.message || 'Something went wrong. Is the API running on port 3001?');
       } finally {
         setLoading(false);
       }
@@ -58,6 +60,11 @@ export default function NewProjectPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-8 mt-8">
+      {error && (
+        <div className="bg-destructive/10 border border-destructive text-destructive rounded-lg px-4 py-3 text-sm">
+          ⚠️ {error}
+        </div>
+      )}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Onboard New Project</h1>
         <p className="text-muted-foreground">Select your source code to begin security analysis.</p>

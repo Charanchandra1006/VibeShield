@@ -12,7 +12,8 @@
   "dependencies": {
     "bullmq": "^5.14.0",
     "ioredis": "^5.4.1",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "@vibeshield/database": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.5.4",

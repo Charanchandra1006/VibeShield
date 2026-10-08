@@ -2,6 +2,12 @@ import { Worker, Job } from 'bullmq';
 import { PrismaClient } from '@vibeshield/database';
 import IORedis from 'ioredis';
 import * as dotenv from 'dotenv';
+import { SemgrepAdapter } from './scanners/semgrep.adapter';
+import { GitleaksAdapter } from './scanners/gitleaks.adapter';
+import { OsvAdapter } from './scanners/osv.adapter';
+import { ConfigAdapter } from './scanners/config.adapter';
+import { ScanNormalizer } from './normalization/normalizer';
+import { ScannerAdapter } from './scanners/adapter.interface';
 
 dotenv.config();
 
@@ -12,49 +18,68 @@ const connection = new IORedis({
 });
 
 const prisma = new PrismaClient();
+const normalizer = new ScanNormalizer(prisma);
+
+const adapters: ScannerAdapter[] = [
+  new SemgrepAdapter(),
+  new GitleaksAdapter(),
+  new OsvAdapter(),
+  new ConfigAdapter(),
+];
 
 const worker = new Worker('scan-jobs', async (job: Job) => {
   const { scanId, projectId, snapshotId, profile } = job.data;
-  console.log(`[Worker] Started processing scan ${scanId} for project ${projectId} with profile ${profile}`);
+  console.log(`[Worker] Started processing scan ${scanId} for project ${projectId}`);
 
   try {
-    // 1. Update status to PREPARING
-    await prisma.scan.update({
-      where: { id: scanId },
-      data: { status: 'PREPARING', progress: 10 }
-    });
+    await prisma.scan.update({ where: { id: scanId }, data: { status: 'PREPARING', progress: 10 } });
 
-    // 2. Mock pulling snapshot & extracting (In MVP this would hit S3)
-    console.log(`[Worker] Snapshot ${snapshotId} retrieved. Environment prepared.`);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Mock extracting source code snapshot to a temporary directory
+    const sourcePath = '/tmp/vibeshield-scan-' + scanId;
+    console.log(`[Worker] Snapshot extracted to ${sourcePath}`);
     
-    // 3. Update status to SCANNING
-    await prisma.scan.update({
-      where: { id: scanId },
-      data: { status: 'SCANNING', progress: 30 }
-    });
+    await prisma.scan.update({ where: { id: scanId }, data: { status: 'SCANNING', progress: 30 } });
 
-    // 4. Mock Semgrep & Gitleaks scanning
-    console.log(`[Worker] Running Semgrep & Gitleaks on source...`);
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Execute all scanners
+    const allFindings = [];
+    for (const adapter of adapters) {
+      console.log(`[Worker] Running engine: ${adapter.name}`);
+      
+      const startTime = Date.now();
+      const findings = await adapter.execute({ sourcePath });
+      const durationMs = Date.now() - startTime;
+      
+      allFindings.push(...findings);
 
-    // 5. Update status to NORMALIZING
-    await prisma.scan.update({
-      where: { id: scanId },
-      data: { status: 'NORMALIZING', progress: 80 }
-    });
+      // Record execution metadata
+      await prisma.scannerExecution.create({
+        data: {
+          scanId,
+          engine: adapter.name,
+          version: 'latest',
+          status: 'SUCCESS',
+          findingsCount: findings.length,
+          durationMs,
+        }
+      });
+    }
 
-    // 6. Finalize scan status
+    await prisma.scan.update({ where: { id: scanId }, data: { status: 'NORMALIZING', progress: 80 } });
+
+    // Normalize and persist findings
+    await normalizer.normalizeAndPersist(projectId, scanId, allFindings);
+
+    // Finalize scan
     await prisma.scan.update({
       where: { id: scanId },
       data: { 
         status: 'COMPLETED', 
         progress: 100,
-        coverage: 100, // 100% of files scanned successfully
+        coverage: 100, 
       }
     });
 
-    console.log(`[Worker] Completed processing scan ${scanId}`);
+    console.log(`[Worker] Completed processing scan ${scanId} with ${allFindings.length} findings.`);
     return { success: true };
   } catch (error) {
     console.error(`[Worker] Error processing scan ${scanId}:`, error);

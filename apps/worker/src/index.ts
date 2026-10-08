@@ -1,15 +1,12 @@
 import { Worker, Job } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import IORedis from 'ioredis';
-import * as dotenv from 'dotenv';
 import { SemgrepAdapter } from './scanners/semgrep.adapter';
 import { GitleaksAdapter } from './scanners/gitleaks.adapter';
 import { OsvAdapter } from './scanners/osv.adapter';
 import { ConfigAdapter } from './scanners/config.adapter';
 import { ScanNormalizer } from './normalization/normalizer';
 import { ScannerAdapter } from './scanners/adapter.interface';
-
-dotenv.config();
 
 const connection = new IORedis({
   host: process.env.REDIS_HOST || 'localhost',

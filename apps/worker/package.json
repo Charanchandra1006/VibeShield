@@ -6,16 +6,18 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "dev": "tsx --env-file=../../.env src/index.ts",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {
+    "@vibeshield/database": "workspace:*",
     "bullmq": "^5.14.0",
     "dotenv": "^16.4.5",
     "ioredis": "^5.4.1"
   },
   "devDependencies": {
     "@types/node": "^22.5.4",
+    "tsx": "^4.19.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.2"
   }

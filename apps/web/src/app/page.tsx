@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Shield, Zap, Search, Lock } from "lucide-react";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -21,8 +22,12 @@ export default function Home() {
           <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
         </nav>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" className="hidden sm:inline-flex">Sign In</Button>
-          <Button className="bg-primary hover:bg-primary/90">Get Started</Button>
+          <Button variant="ghost" className="hidden sm:inline-flex" asChild>
+            <Link href="/login">Sign In</Link>
+          </Button>
+          <Button className="bg-primary hover:bg-primary/90" asChild>
+            <Link href="/register">Get Started</Link>
+          </Button>
         </div>
       </header>
 
@@ -56,11 +61,11 @@ export default function Home() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Button size="lg" className="w-full sm:w-auto text-base h-12 px-8 shadow-[0_0_40px_-10px_rgba(124,58,237,0.5)]">
-              Start Scanning Free
+            <Button size="lg" className="w-full sm:w-auto text-base h-12 px-8 shadow-[0_0_40px_-10px_rgba(124,58,237,0.5)]" asChild>
+              <Link href="/register">Start Scanning Free</Link>
             </Button>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto text-base h-12 px-8">
-              View Documentation
+            <Button size="lg" variant="outline" className="w-full sm:w-auto text-base h-12 px-8" asChild>
+              <Link href="/dashboard">View Documentation</Link>
             </Button>
           </div>
         </motion.div>

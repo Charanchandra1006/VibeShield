@@ -1,10 +1,26 @@
 "use client";
 
-import { Shield, LayoutDashboard, Search, Bell, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Shield, LayoutDashboard, Search, Bell, Settings, LogOut, ChevronDown, FolderKanban } from "lucide-react";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { apiFetch } from "@/lib/api";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const handleLogout = async () => {
+    try {
+      await apiFetch('/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore - clear client state anyway
+    } finally {
+      router.push('/login');
+    }
+  };
+
+  const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="px-6 py-3 border-b border-border bg-card/50 backdrop-blur-md sticky top-0 z-40 flex items-center justify-between">
@@ -26,28 +42,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="flex items-center gap-4">
           <nav className="hidden md:flex items-center gap-4 text-sm font-medium">
-            <Link href="/dashboard" className="text-primary flex items-center gap-2">
+            <Link href="/dashboard" className={`${isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'} flex items-center gap-2 transition-colors`}>
               <LayoutDashboard className="w-4 h-4" />
               Dashboard
             </Link>
-            <Link href="/dashboard/scans" className="text-muted-foreground hover:text-foreground flex items-center gap-2 transition-colors">
+            <Link href="/projects" className={`${isActive('/projects') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'} flex items-center gap-2 transition-colors`}>
+              <FolderKanban className="w-4 h-4" />
+              Projects
+            </Link>
+            <Link href="/projects/new" className={`${isActive('/projects/new') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'} flex items-center gap-2 transition-colors`}>
               <Search className="w-4 h-4" />
-              Scans
+              New Scan
             </Link>
           </nav>
           
           <div className="h-6 w-px bg-border hidden md:block" />
           
-          <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-foreground" aria-label="Notifications" onClick={() => router.push('/dashboard')}>
             <Bell className="w-5 h-5" />
             <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full animate-pulse" />
           </Button>
           
-          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground" aria-label="Settings" onClick={() => router.push('/dashboard')}>
             <Settings className="w-5 h-5" />
           </Button>
           
-          <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10">
+          <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" aria-label="Log out" onClick={handleLogout}>
             <LogOut className="w-5 h-5" />
           </Button>
         </div>

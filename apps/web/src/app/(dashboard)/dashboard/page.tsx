@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Shield, GitBranch, Plus } from "lucide-react";
+import Link from "next/link";
 
 export default function DashboardPage() {
   return (
@@ -13,8 +14,10 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground mt-1">Overview of your security posture across all projects.</p>
         </div>
-        <Button className="shrink-0 gap-2">
-          <Plus className="w-4 h-4" /> New Scan
+        <Button className="shrink-0 gap-2" asChild>
+          <Link href="/projects/new">
+            <Plus className="w-4 h-4" /> New Scan
+          </Link>
         </Button>
       </div>
 

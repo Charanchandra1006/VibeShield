@@ -1,9 +1,10 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Suspense, useState } from "react";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, ShieldAlert, Shield, ShieldCheck, ChevronRight, Loader2 } from "lucide-react";
+import { Search, Filter, ShieldAlert, Shield, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useParams } from "next/navigation";
@@ -11,32 +12,61 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from "@/lib/api";
 
 export default function FindingsListPage() {
-  const params = useParams();
+  return (
+    <Suspense fallback={<FindingsLoading />}>
+      <FindingsListInner />
+    </Suspense>
+  );
+}
 
-  const { data: findings, isLoading } = useQuery({
-    queryKey: ['projects', params.projectId, 'findings'],
-    queryFn: () => apiFetch(`/projects/${params.projectId}/findings`).then(res => res.data),
+function FindingsLoading() {
+  return (
+    <div className="flex items-center justify-center py-16 text-muted-foreground">
+      <Loader2 className="w-6 h-6 animate-spin" />
+    </div>
+  );
+}
+
+function FindingsListInner() {
+  const params = useParams();
+  const projectId = params?.projectId as string | undefined;
+  const [search, setSearch] = useState("");
+
+  const { data: findings, isLoading, isError } = useQuery({
+    queryKey: ['projects', projectId, 'findings'],
+    queryFn: () => apiFetch(`/projects/${projectId}/findings`).then((res) => res.data),
+    enabled: !!projectId,
   });
 
   const getSeverityCounts = () => {
-    if (!findings) return { Critical: 0, High: 0, Medium: 0, Low: 0 };
-    return findings.reduce((acc: any, curr: any) => {
-      const sev = curr.occurrences?.[0]?.severity || 'Low';
+    if (!findings) return { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 } as Record<string, number>;
+    return findings.reduce((acc: Record<string, number>, curr: { occurrences?: Array<{ severity?: string }> }) => {
+      const sev = curr.occurrences?.[0]?.severity || 'LOW';
       acc[sev] = (acc[sev] || 0) + 1;
       return acc;
     }, { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 });
   };
   const counts = getSeverityCounts();
 
+  const filtered = (findings ?? []).filter((f: { fingerprint?: string; occurrences?: Array<{ ruleId?: string; filePath?: string }> }) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      f.fingerprint?.toLowerCase().includes(q) ||
+      f.occurrences?.[0]?.ruleId?.toLowerCase().includes(q) ||
+      f.occurrences?.[0]?.filePath?.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="text-sm text-muted-foreground mb-1">Project / {params.projectId}</div>
+          <div className="text-sm text-muted-foreground mb-1">Project / {projectId}</div>
           <h1 className="text-3xl font-bold tracking-tight">Security Findings</h1>
         </div>
-        <Button variant="outline" className="shrink-0 gap-2">
-          <Filter className="w-4 h-4" /> Filter
+        <Button variant="outline" className="shrink-0 gap-2" onClick={() => setSearch("")}>
+          <Filter className="w-4 h-4" /> {search ? "Clear filter" : "Filter"}
         </Button>
       </div>
 
@@ -46,7 +76,7 @@ export default function FindingsListPage() {
           { label: 'High', val: counts.HIGH },
           { label: 'Medium', val: counts.MEDIUM },
           { label: 'Low', val: counts.LOW }
-        ].map((sev, i) => (
+        ].map((sev) => (
           <Card key={sev.label} className="border-border bg-card/30">
             <CardContent className="p-4 flex items-center justify-between">
               <span className="font-medium text-sm text-muted-foreground">{sev.label}</span>
@@ -60,7 +90,13 @@ export default function FindingsListPage() {
         <CardHeader className="p-4 border-b border-border">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input type="search" placeholder="Search vulnerabilities..." className="pl-9 bg-background/50" />
+            <Input
+              type="search"
+              placeholder="Search vulnerabilities..."
+              className="pl-9 bg-background/50"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -83,20 +119,26 @@ export default function FindingsListPage() {
                       <Loader2 className="w-6 h-6 animate-spin mx-auto" />
                     </td>
                   </tr>
-                ) : findings?.length === 0 ? (
+                ) : isError ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
+                      Could not load findings. Is the API running on port 3001?
+                    </td>
+                  </tr>
+                ) : filtered?.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-8 text-center text-muted-foreground">
                       No security findings discovered yet! Keep up the good work.
                     </td>
                   </tr>
-                ) : findings?.map((finding: any, i: number) => {
+                ) : filtered?.map((finding: { id: string; fingerprint: string; status: string; occurrences?: Array<{ severity?: string; ruleId?: string; filePath?: string; startLine?: number }> }, i: number) => {
                   const occurrence = finding.occurrences?.[0] || {};
                   return (
-                  <motion.tr 
+                  <motion.tr
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
-                    key={finding.id} 
+                    key={finding.id}
                     className="hover:bg-muted/10 transition-colors group cursor-pointer"
                   >
                     <td className="px-6 py-4">
@@ -115,7 +157,7 @@ export default function FindingsListPage() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Link href={`/findings/${finding.id}`}>
-                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 transition-opacity" aria-label="View finding">
                           <ChevronRight className="w-4 h-4" />
                         </Button>
                       </Link>

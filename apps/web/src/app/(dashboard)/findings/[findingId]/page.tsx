@@ -1,26 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, Terminal, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from "@/lib/api";
 
 export default function FindingDetailPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
+      <FindingDetailInner />
+    </Suspense>
+  );
+}
+
+function FindingDetailInner() {
   const params = useParams();
+  const router = useRouter();
+  const findingId = params?.findingId as string | undefined;
   const [activeTab, setActiveTab] = useState('overview');
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const { data: aiExplanation, isLoading: isAILoading } = useQuery({
-    queryKey: ['ai', 'explain', params.findingId],
+    queryKey: ['ai', 'explain', findingId],
     queryFn: () => apiFetch('/ai/explain', {
       method: 'POST',
-      body: JSON.stringify({ findingId: params.findingId })
-    }).then(res => res.data),
-    enabled: activeTab === 'fix' || activeTab === 'overview', // Fetch when these tabs are open
+      body: JSON.stringify({ findingId })
+    }).then((res) => res.data),
+    enabled: !!findingId && (activeTab === 'fix' || activeTab === 'overview' || activeTab === 'impact'),
   });
+
+  const handleAction = (msg: string) => {
+    setActionMsg(msg);
+    setTimeout(() => setActionMsg(null), 3000);
+  };
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -32,22 +48,27 @@ export default function FindingDetailPage() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {actionMsg && (
+        <div className="bg-primary/10 border border-primary/20 text-foreground rounded-lg px-4 py-3 text-sm">
+          {actionMsg}
+        </div>
+      )}
       <div className="flex items-center gap-3 mb-2">
         <span className="flex items-center gap-1 text-destructive bg-destructive/10 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">
           <ShieldAlert className="w-3.5 h-3.5" /> Critical
         </span>
-        <span className="text-sm font-medium text-muted-foreground">ID: {params.findingId} • GITLEAKS</span>
+        <span className="text-sm font-medium text-muted-foreground">ID: {findingId} • GITLEAKS</span>
       </div>
-      
+
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-bold tracking-tight">Exposed AWS Access Token</h1>
         <div className="flex gap-2">
-          <Button variant="outline" className="border-border">Mark False Positive</Button>
-          <Button>Resolve Issue</Button>
+          <Button variant="outline" className="border-border" onClick={() => handleAction('Marked as false positive (local demo state). Backend review endpoint coming soon.')}>Mark False Positive</Button>
+          <Button onClick={() => handleAction('Marked as resolved (local demo state). Push a fix and rescan to verify.')}>Resolve Issue</Button>
         </div>
       </div>
 
-      <div className="flex overflow-x-auto border-b border-border hide-scrollbar">
+      <div className="flex overflow-x-auto border-b border-border">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -83,11 +104,11 @@ export default function FindingDetailPage() {
                       {aiExplanation.explanation}
                     </>
                   ) : (
-                    "Loading summary..."
+                    "Could not load AI summary. Is the API running on port 3001?"
                   )}
                 </CardContent>
               </Card>
-              
+
               <Card className="border-border bg-orange-500/5 border-orange-500/20">
                 <CardContent className="p-4 flex gap-4">
                   <AlertTriangle className="w-6 h-6 text-orange-500 shrink-0" />
@@ -98,7 +119,7 @@ export default function FindingDetailPage() {
                 </CardContent>
               </Card>
             </div>
-            
+
             <div className="space-y-6">
               <Card className="border-border">
                 <CardContent className="p-4 space-y-4 text-sm">
@@ -127,15 +148,49 @@ export default function FindingDetailPage() {
             </div>
             <div className="p-4 font-mono text-sm overflow-x-auto bg-[#0d1117] text-gray-300">
               <div className="text-gray-500">1 | {"{"}</div>
-              <div className="text-gray-500">2 |   "region": "us-east-1",</div>
+              <div className="text-gray-500">2 |   &quot;region&quot;: &quot;us-east-1&quot;,</div>
               <div className="bg-destructive/20 text-destructive-foreground px-2 -mx-2 flex">
                 <span className="text-destructive/50 mr-4 select-none w-4 text-right">3</span>
-                <span>  "accessKeyId": "[REDACTED_SECRET]",</span>
+                <span>  &quot;accessKeyId&quot;: &quot;[REDACTED_SECRET]&quot;,</span>
               </div>
-              <div className="text-gray-500">4 |   "secretAccessKey": "[REDACTED_SECRET]"</div>
+              <div className="text-gray-500">4 |   &quot;secretAccessKey&quot;: &quot;[REDACTED_SECRET]&quot;</div>
               <div className="text-gray-500">5 | {"}"}</div>
             </div>
           </Card>
+        )}
+
+        {activeTab === 'impact' && (
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="text-lg">Business impact</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
+                {isAILoading ? (
+                  <div className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Loading impact analysis...</div>
+                ) : (
+                  <>
+                    <p>An exposed cloud credential can lead to unauthorized infrastructure access, data exfiltration, crypto-mining abuse, and unexpected billing charges.</p>
+                    <p>CVSS-like severity: Critical when the key has broad IAM permissions or is present in public git history.</p>
+                    {aiExplanation?.explanation ? <p>{aiExplanation.explanation}</p> : null}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+            <Card className="border-border">
+              <CardHeader>
+                <CardTitle className="text-lg">Attack scenario</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground leading-relaxed">
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>Attacker scrapes GitHub or leaked artifacts for AWS key patterns.</li>
+                  <li>Attacker calls STS GetCallerIdentity to validate the key.</li>
+                  <li>Attacker enumerates S3, EC2, and IAM permissions for privilege escalation.</li>
+                  <li>Attacker persists via new IAM users or exfiltrates data.</li>
+                </ol>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {activeTab === 'fix' && (
@@ -168,7 +223,7 @@ export default function FindingDetailPage() {
                     )}
                   </>
                 ) : (
-                  <p>Failed to load remediation plan.</p>
+                  <p>Failed to load remediation plan. Is the API running?</p>
                 )}
               </CardContent>
             </Card>
@@ -185,7 +240,10 @@ export default function FindingDetailPage() {
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
                 Push your changes to the repository and trigger a new scan to verify that this vulnerability has been fully resolved.
               </p>
-              <Button variant="outline" className="mt-2">Trigger Rescan</Button>
+              <div className="flex items-center justify-center gap-2">
+                <Button variant="outline" className="mt-2" onClick={() => router.push('/projects/new')}>Trigger Rescan</Button>
+                <Button variant="ghost" className="mt-2" onClick={() => router.back()}>Back</Button>
+              </div>
             </CardContent>
           </Card>
         )}

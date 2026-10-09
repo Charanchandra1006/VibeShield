@@ -1,3 +1,10 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Force a single TypeScript + Prisma Client instance.
+# Without this, pnpm creates two @prisma/client variants (TS 5.9 vs 6.0 via
+# @nestjs/schematics), and `prisma generate` only fills one, leaving
+# worker/api with "did not initialize yet".
+overrides:
+  typescript: 5.9.3

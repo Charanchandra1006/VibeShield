@@ -39,28 +39,38 @@ export class ScansService {
     }
 
     // Create the scan record
+    // NOTE: schema fields are `profile` + `progress` (no `coverage`/`settings`)
     const scan = await this.prisma.scan.create({
       data: {
         projectId,
         snapshotId: snapshot.id,
         status: 'CREATED',
-        coverage: 0,
-        settings: { profile },
+        profile,
+        progress: 0,
       }
     });
 
-    // Enqueue the job
-    await this.scanQueue.add('start-scan', {
-      scanId: scan.id,
-      projectId: scan.projectId,
-      snapshotId: snapshot.id,
-      workspaceId,
-      profile
-    }, {
-      jobId: scan.id,
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 5000 }
-    });
+    // Enqueue the job (fails clearly if Redis is down)
+    try {
+      await this.scanQueue.add('start-scan', {
+        scanId: scan.id,
+        projectId: scan.projectId,
+        snapshotId: snapshot.id,
+        workspaceId,
+        profile
+      }, {
+        jobId: scan.id,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 }
+      });
+    } catch (err) {
+      // Roll back to FAILED so UI doesn't hang in CREATED forever
+      await this.prisma.scan.update({
+        where: { id: scan.id },
+        data: { status: 'FAILED' },
+      }).catch(() => null);
+      throw new BadRequestException('Could not queue scan job. Is Redis running on localhost:6379? Start it with `docker compose up -d redis`.');
+    }
 
     // Update state to QUEUED
     return this.prisma.scan.update({

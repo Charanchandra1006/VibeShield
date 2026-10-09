@@ -97,8 +97,9 @@ model Scan {
   snapshotId    String
   snapshot      SourceSnapshot     @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
   status        String
-  profile       String
+  profile       String             @default("default")
   progress      Int                @default(0)
+  createdAt     DateTime           @default(now())
   startedAt     DateTime?
   completedAt   DateTime?
   executions    ScannerExecution[]

@@ -69,10 +69,10 @@ const worker = new Worker('scan-jobs', async (job: Job) => {
     // Finalize scan
     await prisma.scan.update({
       where: { id: scanId },
-      data: { 
-        status: 'COMPLETED', 
+      data: {
+        status: 'COMPLETED',
         progress: 100,
-        coverage: 100, 
+        completedAt: new Date(),
       }
     });
 

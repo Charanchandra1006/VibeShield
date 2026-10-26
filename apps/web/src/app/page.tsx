@@ -1,112 +1,159 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Shield, Zap, Search, Lock } from "lucide-react";
+import { ArrowRight, CheckCircle2, GitBranch, GitCommit, Shield, Terminal } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Navigation */}
-      <header className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-background/50 backdrop-blur-md sticky top-0 z-50">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Shield className="w-5 h-5 text-primary" />
+    <div className="flex flex-col min-h-screen bg-shell text-ink">
+      {/* Header */}
+      <header className="px-6 py-3 flex items-center justify-between border-b border-hairline bg-surface sticky top-0 z-50">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-full border-2 border-primary bg-primary-soft flex items-center justify-center">
+            <span className="w-2.5 h-2.5 rounded-full bg-primary" />
           </div>
-          <span className="font-bold text-xl tracking-tight">VibeShield</span>
+          <span className="font-semibold text-base tracking-tight text-ink">VibeShield</span>
         </div>
-        <nav className="hidden md:flex gap-6 text-sm font-medium text-muted-foreground">
-          <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-          <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
-          <a href="#pricing" className="hover:text-foreground transition-colors">Pricing</a>
+        <nav className="hidden md:flex gap-6 text-xs font-mono text-ink-muted">
+          <a href="#engines" className="hover:text-ink transition-colors">engines:4</a>
+          <a href="#architecture" className="hover:text-ink transition-colors">pipeline.v2</a>
+          <a href="#matrix" className="hover:text-ink transition-colors">matrix</a>
         </nav>
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" className="hidden sm:inline-flex" asChild>
-            <Link href="/login">Sign In</Link>
-          </Button>
-          <Button className="bg-primary hover:bg-primary/90" asChild>
-            <Link href="/register">Get Started</Link>
-          </Button>
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <Link href="/login">
+            <Button variant="ghost" size="sm" className="text-xs font-mono">
+              sign in
+            </Button>
+          </Link>
+          <Link href="/dashboard">
+            <Button size="sm" className="text-xs font-mono">
+              open console &gt;
+            </Button>
+          </Link>
         </div>
       </header>
 
       {/* Hero Section */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 relative overflow-hidden pt-20 pb-32">
-        
-        {/* Background glow effects */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 rounded-full blur-[120px] -z-10 opacity-50" />
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px] -z-10" />
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-center max-w-4xl mx-auto space-y-8"
-        >
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary text-sm font-medium mb-4">
-            <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse" />
-            VibeShield Public Beta is Live
+      <main className="flex-1 max-w-[1264px] mx-auto w-full px-4 sm:px-6 py-16 sm:py-24 space-y-16">
+        <div className="max-w-3xl space-y-6">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-wash border border-hairline text-xs font-mono text-ink-muted">
+            <span className="w-2 h-2 rounded-full bg-lane-1" />
+            <span>git log --graph --security</span>
           </div>
-          
-          <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight lg:leading-[1.1] bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gray-500">
-            Build Fast. <br className="hidden md:inline" />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-500">
-              Ship Secure.
-            </span>
+
+          <h1 className="text-4xl sm:text-6xl font-semibold tracking-[-0.04em] text-ink leading-none">
+            Continuous AppSec. <br />
+            Drawn as a commit graph.
           </h1>
-          
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            An AI-native application security platform that detects, explains, prioritizes, and helps remediate vulnerabilities before they reach production.
+
+          <p className="text-base sm:text-lg text-ink-muted font-normal leading-relaxed max-w-2xl">
+            Orchestrating Semgrep (SAST), Gitleaks (Secrets), OSV-Scanner (SCA), and Config engines into a unified security timeline. Zero noise. Contextual AI remediation diffs.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Button size="lg" className="w-full sm:w-auto text-base h-12 px-8 shadow-[0_0_40px_-10px_rgba(124,58,237,0.5)]" asChild>
-              <Link href="/register">Start Scanning Free</Link>
-            </Button>
-            <Button size="lg" variant="outline" className="w-full sm:w-auto text-base h-12 px-8" asChild>
-              <Link href="/dashboard">View Documentation</Link>
-            </Button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 font-mono text-xs">
+            <Link href="/dashboard">
+              <Button size="lg" className="gap-2 text-xs font-mono h-10 px-5">
+                git init / launch console <ArrowRight className="w-3.5 h-3.5" />
+              </Button>
+            </Link>
+            <Link href="/projects/new">
+              <Button size="lg" variant="outline" className="text-xs font-mono h-10 px-5">
+                scan sample-repo
+              </Button>
+            </Link>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Feature Cards Grid */}
-        <motion.div 
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="grid md:grid-cols-3 gap-6 w-full max-w-6xl mx-auto mt-32"
-        >
-          <FeatureCard 
-            icon={<Search className="w-6 h-6 text-blue-400" />}
-            title="Automated Assessment"
-            description="Connect your repository or upload code. We automatically scan dependencies, secrets, and code logic."
-          />
-          <FeatureCard 
-            icon={<Zap className="w-6 h-6 text-primary" />}
-            title="AI-Assisted Remediation"
-            description="Translate complex findings into beginner-friendly explanations and generate actionable code fixes."
-          />
-          <FeatureCard 
-            icon={<Lock className="w-6 h-6 text-green-400" />}
-            title="Continuous Verification"
-            description="Rescan after fixing issues and track vulnerability trends across your entire workspace."
-          />
-        </motion.div>
+        {/* Git Graph Visual Block */}
+        <div className="border border-hairline rounded-lg bg-surface p-6 font-mono text-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-hairline pb-3">
+            <div className="flex items-center gap-2">
+              <Terminal className="w-4 h-4 text-primary" />
+              <span className="text-ink font-semibold">pipeline: scan execution graph</span>
+            </div>
+            <span className="text-ink-muted">status: ok</span>
+          </div>
+
+          <div className="relative pl-6 space-y-3 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-rail">
+            <div className="relative">
+              <span className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full border-2 border-surface bg-lane-1 ring-1 ring-shell" />
+              <div className="text-ink">
+                <span className="text-lane-1 font-semibold">commit 7a3f89e</span> <span className="text-ink-muted">|</span> <span className="text-ink">stage: source unpacked into isolated BullMQ worker</span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <span className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full border-2 border-surface bg-lane-0 ring-1 ring-shell" />
+              <div className="text-ink">
+                <span className="text-lane-0 font-semibold">scan:gitleaks</span> <span className="text-ink-muted">|</span> <span>detected API credential in server.js:14 (high)</span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <span className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full border-2 border-surface bg-destructive ring-1 ring-shell" />
+              <div className="text-ink">
+                <span className="text-destructive font-semibold">scan:semgrep</span> <span className="text-ink-muted">|</span> <span>detected raw SQL concatenation in query.ts:28 (critical)</span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <span className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full border-2 border-surface bg-lane-3 ring-1 ring-shell" />
+              <div className="text-ink">
+                <span className="text-lane-3 font-semibold">scan:osv</span> <span className="text-ink-muted">|</span> <span>identified 6 vulnerable lockfile dependencies</span>
+              </div>
+            </div>
+
+            <div className="relative">
+              <span className="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full border-2 border-surface bg-primary ring-1 ring-shell" />
+              <div className="text-ink">
+                <span className="text-primary font-semibold">ai:remediate</span> <span className="text-ink-muted">|</span> <span>generated parametrized query drop-in fix</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Feature Grid */}
+        <div id="architecture" className="grid sm:grid-cols-3 gap-4">
+          <div className="p-5 rounded-lg border border-hairline bg-surface space-y-2">
+            <div className="flex items-center gap-2 font-mono text-xs text-primary font-semibold">
+              <span className="w-2 h-2 rounded-full bg-lane-0" />
+              <span>Multi-Engine Ingestion</span>
+            </div>
+            <p className="text-xs text-ink-muted leading-relaxed font-sans">
+              Parallel scanning with native SAST rules, secret entropy detection, and CVE vulnerability databases.
+            </p>
+          </div>
+
+          <div className="p-5 rounded-lg border border-hairline bg-surface space-y-2">
+            <div className="flex items-center gap-2 font-mono text-xs text-primary font-semibold">
+              <span className="w-2 h-2 rounded-full bg-lane-1" />
+              <span>Contextual Explanations</span>
+            </div>
+            <p className="text-xs text-ink-muted leading-relaxed font-sans">
+              Detailed breakdown of attacker exploits, business impact, and copy-paste secure code solutions.
+            </p>
+          </div>
+
+          <div className="p-5 rounded-lg border border-hairline bg-surface space-y-2">
+            <div className="flex items-center gap-2 font-mono text-xs text-primary font-semibold">
+              <span className="w-2 h-2 rounded-full bg-lane-3" />
+              <span>Triage & Audit Trail</span>
+            </div>
+            <p className="text-xs text-ink-muted leading-relaxed font-sans">
+              Manage false positives, track verified fixes, and execute re-scans with persistent audit history.
+            </p>
+          </div>
+        </div>
       </main>
-    </div>
-  );
-}
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
-  return (
-    <div className="group relative glass rounded-2xl p-8 hover:bg-white/[0.15] dark:hover:bg-black/[0.15] transition-all duration-300 overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-      <div className="w-12 h-12 rounded-xl bg-background/50 border flex items-center justify-center mb-6 relative z-10">
-        {icon}
-      </div>
-      <h3 className="text-xl font-semibold mb-3 relative z-10">{title}</h3>
-      <p className="text-muted-foreground leading-relaxed relative z-10">{description}</p>
+      {/* Footer */}
+      <footer className="border-t border-hairline py-4 px-6 text-xs text-ink-muted bg-surface font-mono">
+        <div className="max-w-[1264px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>VibeShield Security Platform</span>
+          <span className="text-ink-muted">v2.4.0 • git-log-aesthetic</span>
+        </div>
+      </footer>
     </div>
   );
 }

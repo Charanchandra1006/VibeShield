@@ -1,253 +1,403 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShieldAlert, Terminal, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
+import { Terminal, Sparkles, Loader2, ArrowLeft, CheckCircle2, Copy, Check, AlertTriangle } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from "@/lib/api";
+import Link from "next/link";
 
 export default function FindingDetailPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center py-16 text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin" /></div>}>
+    <Suspense fallback={<FindingLoading />}>
       <FindingDetailInner />
     </Suspense>
+  );
+}
+
+function FindingLoading() {
+  return (
+    <div className="flex items-center justify-center py-24 text-ink-muted text-xs font-mono">
+      <Loader2 className="w-5 h-5 animate-spin mr-2 text-primary" /> reading vulnerability AST...
+    </div>
   );
 }
 
 function FindingDetailInner() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const findingId = params?.findingId as string | undefined;
-  const [activeTab, setActiveTab] = useState('overview');
-  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
-  const { data: aiExplanation, isLoading: isAILoading } = useQuery({
-    queryKey: ['ai', 'explain', findingId],
-    queryFn: () => apiFetch('/ai/explain', {
-      method: 'POST',
-      body: JSON.stringify({ findingId })
-    }).then((res) => res.data),
-    enabled: !!findingId && (activeTab === 'fix' || activeTab === 'overview' || activeTab === 'impact'),
+  const [activeTab, setActiveTab] = useState<'overview' | 'code' | 'impact' | 'fix' | 'verify'>('overview');
+  const [copied, setCopied] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+
+  // 1. Fetch Real Finding Data
+  const { data: finding, isLoading: isFindingLoading, isError } = useQuery({
+    queryKey: ['findings', findingId],
+    queryFn: () => apiFetch(`/findings/${findingId}`).then((res) => res.data),
+    enabled: !!findingId,
   });
 
-  const handleAction = (msg: string) => {
-    setActionMsg(msg);
-    setTimeout(() => setActionMsg(null), 3000);
+  // 2. Fetch AI Contextual Remediation
+  const { data: aiExplanation, isLoading: isAILoading } = useQuery({
+    queryKey: ['ai', 'explain', findingId],
+    queryFn: () =>
+      apiFetch('/ai/explain', {
+        method: 'POST',
+        body: JSON.stringify({ findingId }),
+      }).then((res) => res.data),
+    enabled: !!findingId,
+  });
+
+  // 3. Status Mutation (Resolve / False Positive / Reopen)
+  const statusMutation = useMutation({
+    mutationFn: ({ status, reason }: { status: string; reason?: string }) =>
+      apiFetch(`/findings/${findingId}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, reason }),
+      }),
+    onSuccess: (res, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['findings', findingId] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      setStatusMsg(`status updated: ${vars.status.toLowerCase()}`);
+      setTimeout(() => setStatusMsg(null), 4000);
+    },
+  });
+
+  const occurrence = finding?.occurrences?.[0] || {};
+  const severity = occurrence.severity || 'HIGH';
+  const filePath = occurrence.filePath || 'unknown';
+  const startLine = occurrence.startLine || 1;
+  const ruleId = occurrence.ruleId || 'Security Finding';
+  const evidence = occurrence.evidence || '';
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'code', label: 'Affected Code' },
-    { id: 'impact', label: 'Potential Impact' },
-    { id: 'fix', label: 'How to Fix' },
+    { id: 'impact', label: 'Impact' },
+    { id: 'fix', label: 'Remediation' },
     { id: 'verify', label: 'Verification' },
   ];
 
+  if (isFindingLoading) {
+    return <FindingLoading />;
+  }
+
+  if (isError || !finding) {
+    return (
+      <div className="py-16 text-center space-y-3 font-mono">
+        <div className="text-xs text-destructive">fatal: finding not found or inaccessible</div>
+        <Button variant="outline" size="sm" onClick={() => router.back()} className="text-xs font-mono">
+          &lt; return
+        </Button>
+      </div>
+    );
+  }
+
+  const nodeColor =
+    severity === 'CRITICAL'
+      ? 'bg-destructive'
+      : severity === 'HIGH'
+      ? 'bg-lane-0'
+      : severity === 'MEDIUM'
+      ? 'bg-lane-5'
+      : 'bg-lane-3';
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {actionMsg && (
-        <div className="bg-primary/10 border border-primary/20 text-foreground rounded-lg px-4 py-3 text-sm">
-          {actionMsg}
+      {/* Breadcrumb Navigation */}
+      <div className="flex items-center gap-2 text-xs font-mono text-ink-muted">
+        <Link
+          href={`/projects/${finding.projectId}/findings`}
+          className="hover:text-ink transition-colors flex items-center gap-1"
+        >
+          <ArrowLeft className="w-3 h-3" /> findings
+        </Link>
+        <span>/</span>
+        <span>{finding.project?.name}</span>
+        <span>/</span>
+        <span className="text-ink font-semibold">{finding.id.substring(0, 12)}</span>
+      </div>
+
+      {/* Notification Banner */}
+      {statusMsg && (
+        <div className="p-3 rounded-lg bg-lane-1/10 border border-lane-1/30 text-lane-1 text-xs font-mono flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{statusMsg}</span>
         </div>
       )}
-      <div className="flex items-center gap-3 mb-2">
-        <span className="flex items-center gap-1 text-destructive bg-destructive/10 px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider">
-          <ShieldAlert className="w-3.5 h-3.5" /> Critical
-        </span>
-        <span className="text-sm font-medium text-muted-foreground">ID: {findingId} • GITLEAKS</span>
-      </div>
 
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Exposed AWS Access Token</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" className="border-border" onClick={() => handleAction('Marked as false positive (local demo state). Backend review endpoint coming soon.')}>Mark False Positive</Button>
-          <Button onClick={() => handleAction('Marked as resolved (local demo state). Push a fix and rescan to verify.')}>Resolve Issue</Button>
+      {/* Header Info */}
+      <div className="space-y-3 border-b border-hairline pb-5">
+        <div className="flex items-center gap-2.5 flex-wrap font-mono text-xs">
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-hairline bg-surface text-ink font-semibold">
+            <span className={`w-2.5 h-2.5 rounded-full border-2 border-surface ${nodeColor}`} />
+            {severity}
+          </span>
+
+          <span className="text-ink-muted">rule: <strong className="text-ink font-mono">{ruleId}</strong></span>
+
+          <span className={`px-2 py-0.5 rounded border ${
+            finding.status === 'OPEN'
+              ? 'text-primary bg-primary-soft border-primary/40'
+              : finding.status === 'RESOLVED'
+              ? 'text-lane-1 bg-lane-1/10 border-lane-1/30'
+              : 'text-ink-muted bg-wash border-hairline'
+          }`}>
+            {finding.status.toLowerCase()}
+          </span>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-ink">
+              {aiExplanation?.summary?.split('.')[0] || ruleId}
+            </h1>
+            <p className="text-xs font-mono text-ink-muted mt-1">
+              {filePath}:{startLine}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {finding.status !== 'FALSE_POSITIVE' && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate({ status: 'FALSE_POSITIVE', reason: 'Marked false positive' })}
+                className="text-xs font-mono"
+              >
+                false_positive
+              </Button>
+            )}
+
+            {finding.status !== 'RESOLVED' ? (
+              <Button
+                size="sm"
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate({ status: 'RESOLVED', reason: 'Remediated by developer' })}
+                className="text-xs font-mono"
+              >
+                resolve
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={statusMutation.isPending}
+                onClick={() => statusMutation.mutate({ status: 'OPEN', reason: 'Reopened by developer' })}
+                className="text-xs font-mono"
+              >
+                reopen
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="flex overflow-x-auto border-b border-border">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${activeTab === tab.id ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'}`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Tabs Row (3px Commit Blue Underline for Active Tab) */}
+      <div className="flex overflow-x-auto border-b border-hairline gap-2">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-4 py-2.5 text-xs font-medium font-mono whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
+                isActive
+                  ? 'border-primary text-primary font-semibold'
+                  : 'border-transparent text-ink-muted hover:text-ink'
+              }`}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-        className="pt-4"
-      >
+      {/* Tab Panels */}
+      <div className="pt-2">
+        {/* TAB 1: OVERVIEW */}
         {activeTab === 'overview' && (
           <div className="grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-6">
-              <Card className="border-border">
-                <CardHeader>
-                  <CardTitle className="text-lg">What was detected</CardTitle>
-                </CardHeader>
-                <CardContent className="text-muted-foreground leading-relaxed">
-                  {isAILoading ? (
-                    <div className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Generating AI summary...</div>
-                  ) : aiExplanation ? (
-                    <>
-                      {aiExplanation.summary}
-                      <br/><br/>
-                      {aiExplanation.explanation}
-                    </>
-                  ) : (
-                    "Could not load AI summary. Is the API running on port 3001?"
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-orange-500/5 border-orange-500/20">
-                <CardContent className="p-4 flex gap-4">
-                  <AlertTriangle className="w-6 h-6 text-orange-500 shrink-0" />
-                  <div>
-                    <h4 className="font-semibold text-orange-500">Immediate Action Required</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Removing the secret from the file is not enough if it was committed to Git history. The credential must be revoked in the AWS Console immediately.</p>
+            <div className="md:col-span-2 space-y-4">
+              <div className="border border-hairline rounded-lg bg-surface p-5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Analysis & Context
+                </div>
+                {isAILoading ? (
+                  <div className="flex items-center gap-2 py-4 text-xs font-mono text-ink-muted">
+                    <Loader2 className="w-4 h-4 animate-spin text-primary" /> running semantic explanation engine...
                   </div>
-                </CardContent>
-              </Card>
+                ) : (
+                  <div className="space-y-2 text-xs leading-relaxed">
+                    <p className="font-semibold text-ink text-sm">{aiExplanation?.summary}</p>
+                    <p className="text-ink-muted">{aiExplanation?.explanation}</p>
+                  </div>
+                )}
+              </div>
+
+              {severity === 'CRITICAL' && (
+                <div className="border border-destructive/40 bg-destructive/5 rounded-lg p-4 flex gap-3 text-xs font-mono">
+                  <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <span className="font-semibold text-destructive">action_required: critical vulnerability</span>
+                    <p className="text-ink-muted font-sans">
+                      This finding represents an exploitable attack vector. Revoke exposed credentials or patch code prior to deployment.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-6">
-              <Card className="border-border">
-                <CardContent className="p-4 space-y-4 text-sm">
-                  <div>
-                    <div className="text-muted-foreground mb-1">Location</div>
-                    <div className="font-mono">config/aws.json</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground mb-1">Status</div>
-                    <div className="font-medium text-primary">Open</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground mb-1">First Detected</div>
-                    <div>Oct 8, 2026, 12:45 PM</div>
-                  </div>
-                </CardContent>
-              </Card>
+            {/* Sidebar Details */}
+            <div className="border border-hairline rounded-lg bg-surface p-4 space-y-3 text-xs font-mono">
+              <div>
+                <div className="text-ink-muted text-[11px] mb-1">FILE LOCATION</div>
+                <div className="p-2 rounded bg-shell border border-hairline text-ink break-all">
+                  {filePath}:{startLine}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-ink-muted text-[11px] mb-1">RULE IDENTIFIER</div>
+                <div className="text-ink break-all">{ruleId}</div>
+              </div>
+
+              <div>
+                <div className="text-ink-muted text-[11px] mb-1">DISCOVERED</div>
+                <div className="text-ink">{new Date(finding.createdAt || Date.now()).toISOString().substring(0, 10)}</div>
+              </div>
+
+              <div>
+                <div className="text-ink-muted text-[11px] mb-1">FINGERPRINT</div>
+                <div className="text-ink-muted text-[10px] truncate">{finding.fingerprint}</div>
+              </div>
             </div>
           </div>
         )}
 
+        {/* TAB 2: AFFECTED CODE */}
         {activeTab === 'code' && (
-          <Card className="border-border overflow-hidden">
-            <div className="bg-muted/50 px-4 py-2 border-b border-border flex items-center justify-between">
-              <span className="font-mono text-xs text-muted-foreground">config/aws.json</span>
+          <div className="border border-hairline rounded-lg bg-surface overflow-hidden">
+            <div className="px-4 py-2 border-b border-hairline flex items-center justify-between text-xs font-mono bg-wash/40">
+              <span className="font-semibold text-ink">{filePath}</span>
+              <span className="text-ink-muted">line {startLine}</span>
             </div>
-            <div className="p-4 font-mono text-sm overflow-x-auto bg-[#0d1117] text-gray-300">
-              <div className="text-gray-500">1 | {"{"}</div>
-              <div className="text-gray-500">2 |   &quot;region&quot;: &quot;us-east-1&quot;,</div>
-              <div className="bg-destructive/20 text-destructive-foreground px-2 -mx-2 flex">
-                <span className="text-destructive/50 mr-4 select-none w-4 text-right">3</span>
-                <span>  &quot;accessKeyId&quot;: &quot;[REDACTED_SECRET]&quot;,</span>
+            <div className="p-4 font-mono text-xs overflow-x-auto bg-[#0e0e10] text-[#ececec] space-y-1">
+              <div className="text-gray-500 select-none">
+                {Math.max(1, startLine - 1)} | // context
               </div>
-              <div className="text-gray-500">4 |   &quot;secretAccessKey&quot;: &quot;[REDACTED_SECRET]&quot;</div>
-              <div className="text-gray-500">5 | {"}"}</div>
+              <div className="bg-destructive/15 text-destructive px-2 py-1 -mx-2 rounded flex items-center justify-between">
+                <div>
+                  <span className="text-destructive/80 mr-4 select-none font-bold">{startLine}</span>
+                  <span className="font-semibold">{evidence || '// vulnerability location'}</span>
+                </div>
+                <span className="text-[10px] px-1 rounded bg-destructive text-white font-mono">
+                  {ruleId}
+                </span>
+              </div>
+              <div className="text-gray-500 select-none">
+                {startLine + 1} | // end
+              </div>
             </div>
-          </Card>
+          </div>
         )}
 
+        {/* TAB 3: IMPACT */}
         {activeTab === 'impact' && (
-          <div className="grid md:grid-cols-2 gap-6">
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="text-lg">Business impact</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground leading-relaxed space-y-2">
-                {isAILoading ? (
-                  <div className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin"/> Loading impact analysis...</div>
-                ) : (
-                  <>
-                    <p>An exposed cloud credential can lead to unauthorized infrastructure access, data exfiltration, crypto-mining abuse, and unexpected billing charges.</p>
-                    <p>CVSS-like severity: Critical when the key has broad IAM permissions or is present in public git history.</p>
-                    {aiExplanation?.explanation ? <p>{aiExplanation.explanation}</p> : null}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-            <Card className="border-border">
-              <CardHeader>
-                <CardTitle className="text-lg">Attack scenario</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground leading-relaxed">
-                <ol className="list-decimal pl-5 space-y-2">
-                  <li>Attacker scrapes GitHub or leaked artifacts for AWS key patterns.</li>
-                  <li>Attacker calls STS GetCallerIdentity to validate the key.</li>
-                  <li>Attacker enumerates S3, EC2, and IAM permissions for privilege escalation.</li>
-                  <li>Attacker persists via new IAM users or exfiltrates data.</li>
-                </ol>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {activeTab === 'fix' && (
-          <div className="space-y-6">
-            <Card className="border-primary/20 bg-primary/5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Sparkles className="w-24 h-24 text-primary" />
-              </div>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  AI Remediation Assistant
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 relative z-10">
-                <p className="text-muted-foreground">To resolve this safely, follow these steps:</p>
-                {isAILoading ? (
-                  <div className="flex items-center gap-2 p-4 text-sm"><Loader2 className="w-4 h-4 animate-spin"/> Generating remediation plan...</div>
-                ) : aiExplanation ? (
-                  <>
-                    <ol className="list-decimal pl-5 space-y-2 text-sm text-foreground">
-                      {aiExplanation.fixSteps.map((step: string, i: number) => (
-                        <li key={i} dangerouslySetInnerHTML={{ __html: step }} />
-                      ))}
-                    </ol>
-                    {aiExplanation.safeCodeExample && (
-                      <div className="mt-4 p-4 rounded-md bg-black/40 font-mono text-xs border border-border overflow-x-auto whitespace-pre">
-                        {aiExplanation.safeCodeExample}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <p>Failed to load remediation plan. Is the API running?</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {activeTab === 'verify' && (
-          <Card className="border-border">
-            <CardContent className="p-6 text-center space-y-4">
-              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto">
-                <Terminal className="w-6 h-6 text-muted-foreground" />
-              </div>
-              <h3 className="font-medium">Verification Pending</h3>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Push your changes to the repository and trigger a new scan to verify that this vulnerability has been fully resolved.
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="border border-hairline rounded-lg bg-surface p-5 space-y-2">
+              <h3 className="text-sm font-semibold text-ink">Impact Assessment</h3>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                {aiExplanation?.businessImpact ||
+                  'Exposure of private keys or untrusted user input can lead to remote data compromise and system breach.'}
               </p>
-              <div className="flex items-center justify-center gap-2">
-                <Button variant="outline" className="mt-2" onClick={() => router.push('/projects/new')}>Trigger Rescan</Button>
-                <Button variant="ghost" className="mt-2" onClick={() => router.back()}>Back</Button>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+
+            <div className="border border-hairline rounded-lg bg-surface p-5 space-y-2">
+              <h3 className="text-sm font-semibold text-ink">Exploitation Scenario</h3>
+              <p className="text-xs text-ink-muted leading-relaxed">
+                {aiExplanation?.attackScenario ||
+                  'An adversary scans public commit logs or probes the endpoint to execute unauthorized requests.'}
+              </p>
+            </div>
+          </div>
         )}
-      </motion.div>
+
+        {/* TAB 4: HOW TO FIX */}
+        {activeTab === 'fix' && (
+          <div className="space-y-4">
+            <div className="border border-hairline rounded-lg bg-surface p-5 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+                <Sparkles className="w-3.5 h-3.5 text-primary" /> Step-by-Step Remediation Plan
+              </div>
+              {aiExplanation?.fixSteps && aiExplanation.fixSteps.length > 0 ? (
+                <ol className="list-decimal pl-5 space-y-1.5 text-xs text-ink leading-relaxed">
+                  {aiExplanation.fixSteps.map((step: string, idx: number) => (
+                    <li key={idx}>{step}</li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-xs text-ink-muted">Follow standard secure coding patterns for this rule.</p>
+              )}
+            </div>
+
+            {aiExplanation?.safeCodeExample && (
+              <div className="border border-hairline rounded-lg bg-surface overflow-hidden">
+                <div className="px-4 py-2 border-b border-hairline flex items-center justify-between text-xs font-mono bg-wash/40">
+                  <span className="text-ink font-semibold">fix: secure drop-in replacement</span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(aiExplanation.safeCodeExample)}
+                    className="flex items-center gap-1 text-[11px] text-ink-muted hover:text-ink cursor-pointer"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5 text-lane-1" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? "copied" : "copy"}
+                  </button>
+                </div>
+                <pre className="p-4 font-mono text-xs overflow-x-auto bg-[#0e0e10] text-[#7ee787]">
+                  {aiExplanation.safeCodeExample}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: VERIFICATION */}
+        {activeTab === 'verify' && (
+          <div className="border border-hairline rounded-lg bg-surface p-5 space-y-4">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+              <Terminal className="w-3.5 h-3.5 text-primary" /> Verification Steps
+            </div>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              Verify remediation locally using standard command-line security scanners or re-execute the automated pipeline:
+            </p>
+            <div className="p-3.5 rounded-lg bg-shell border border-hairline font-mono text-xs space-y-1.5 text-ink">
+              <div className="text-ink-muted"># 1. Trigger remote scan via VibeShield UI</div>
+              <div className="text-primary font-bold">rescan --project {finding.projectId}</div>
+              <div className="text-ink-muted pt-2"># 2. Or verify locally via CLI</div>
+              <div className="text-ink">semgrep scan --config auto .</div>
+              <div className="text-ink">gitleaks detect --source . --no-git</div>
+              <div className="text-ink">osv-scanner scan source -r .</div>
+            </div>
+            <p className="text-xs text-ink-muted">
+              When resolved, click <strong className="text-ink">resolve</strong> above to record the triage state in the audit log.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

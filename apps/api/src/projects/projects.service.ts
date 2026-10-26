@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { Prisma, Project } from '@prisma/client';
+import { Prisma, Project } from '@vibeshield/database';
 import crypto from 'crypto';
 
 @Injectable()
@@ -21,7 +21,7 @@ export class ProjectsService {
     });
   }
 
-  async findAll(workspaceId: string): Promise<Project[]> {
+  async findAll(workspaceId: string): Promise<any[]> {
     return this.prisma.project.findMany({
       where: { workspaceId },
       orderBy: { createdAt: 'desc' },
@@ -29,6 +29,9 @@ export class ProjectsService {
         scans: {
           orderBy: { createdAt: 'desc' },
           take: 1
+        },
+        _count: {
+          select: { findings: true }
         }
       }
     });
@@ -40,6 +43,13 @@ export class ProjectsService {
     });
     if (!project) throw new NotFoundException('Project not found');
     return project;
+  }
+
+  async delete(id: string, workspaceId: string) {
+    await this.findById(id, workspaceId);
+    return this.prisma.project.delete({
+      where: { id },
+    });
   }
 
   async getFindings(projectId: string, workspaceId: string) {

@@ -1,8 +1,9 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Req, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Body, Param, UseGuards, Req, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProjectsService } from './projects.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 import { AuthGuard } from '../auth/auth.guard.js';
+import { generateSampleZipBuffer } from './sample-project.js';
 import type { Request } from 'express';
 import { z } from 'zod';
 
@@ -30,6 +31,30 @@ export class ProjectsController {
     return { success: true, data: project };
   }
 
+  @Post('sample')
+  async createSample(@Req() req: any) {
+    const workspaceId = req.user.workspaceId;
+    if (!workspaceId) throw new BadRequestException('No workspace found');
+
+    const project = await this.projectsService.create(
+      workspaceId,
+      'vulnerable-web-app-sample',
+      'Node.js / Express',
+      'ZIP',
+    );
+
+    const zipBuffer = await generateSampleZipBuffer();
+    const snapshot = await this.uploadsService.uploadSnapshot(project.id, zipBuffer, zipBuffer.length);
+
+    return {
+      success: true,
+      data: {
+        project,
+        snapshot,
+      },
+    };
+  }
+
   @Get()
   async findAll(@Req() req: any) {
     const projects = await this.projectsService.findAll(req.user.workspaceId);
@@ -40,6 +65,12 @@ export class ProjectsController {
   async findOne(@Param('id') id: string, @Req() req: any) {
     const project = await this.projectsService.findById(id, req.user.workspaceId);
     return { success: true, data: project };
+  }
+
+  @Delete(':id')
+  async delete(@Param('id') id: string, @Req() req: any) {
+    await this.projectsService.delete(id, req.user.workspaceId);
+    return { success: true };
   }
 
   @Get(':id/findings')
@@ -56,7 +87,7 @@ export class ProjectsController {
     @Req() req: any
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    if (file.mimetype !== 'application/zip' && file.mimetype !== 'application/x-zip-compressed') {
+    if (file.mimetype !== 'application/zip' && file.mimetype !== 'application/x-zip-compressed' && !file.originalname?.endsWith('.zip')) {
       throw new BadRequestException('Only ZIP files are supported');
     }
     

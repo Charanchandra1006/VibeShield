@@ -1,7 +1,10 @@
-import { NormalizedFinding, ScannerAdapter } from './adapter.interface';
+import { NormalizedFinding, ScannerAdapter } from './adapter.interface.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 
 const execFileAsync = promisify(execFile);
 
@@ -9,41 +12,76 @@ export class SemgrepAdapter implements ScannerAdapter {
   readonly name = 'SEMGREP';
 
   async execute(scanContext: any): Promise<NormalizedFinding[]> {
+    const reportPath = path.join(os.tmpdir(), `semgrep-${Date.now()}-${Math.random().toString(36).substring(7)}.json`);
     try {
-      // Attempt to run semgrep locally if installed
-      const { stdout } = await execFileAsync('semgrep', ['scan', '--json', scanContext.sourcePath], {
-        maxBuffer: 10 * 1024 * 1024 // 10MB
+      await execFileAsync('semgrep', [
+        'scan',
+        '--config',
+        'auto',
+        '--json',
+        '--output',
+        reportPath,
+        scanContext.sourcePath,
+      ], {
+        maxBuffer: 20 * 1024 * 1024,
       });
-      return this.parseOutput(stdout);
-    } catch (error: any) {
-      // If binary is missing, fallback to simulated realistic findings for MVP
-      if (error.code === 'ENOENT' || error.message.includes('not recognized')) {
-        console.warn('[SemgrepAdapter] Semgrep binary not found. Generating simulated findings for demonstration.');
-        return this.simulateFindings();
+
+      if (fs.existsSync(reportPath)) {
+        const rawContent = fs.readFileSync(reportPath, 'utf8');
+        return this.parseOutput(rawContent, scanContext.sourcePath);
       }
-      console.error('[SemgrepAdapter] Error executing semgrep:', error);
       return [];
+    } catch (error: any) {
+      if (fs.existsSync(reportPath)) {
+        try {
+          const rawContent = fs.readFileSync(reportPath, 'utf8');
+          return this.parseOutput(rawContent, scanContext.sourcePath);
+        } catch {
+          // ignore
+        }
+      }
+      console.warn('[SemgrepAdapter] Semgrep execution error:', error.message);
+      return [];
+    } finally {
+      if (fs.existsSync(reportPath)) {
+        try {
+          fs.unlinkSync(reportPath);
+        } catch {
+          // ignore
+        }
+      }
     }
   }
 
-  private parseOutput(stdout: string): NormalizedFinding[] {
+  private parseOutput(stdout: string, sourcePath: string): NormalizedFinding[] {
     try {
+      if (!stdout || stdout.trim() === '') return [];
       const data = JSON.parse(stdout);
+      if (!data.results || !Array.isArray(data.results)) return [];
+
       return data.results.map((r: any) => {
-        const fingerprint = crypto.createHash('sha256').update(`SEMGREP:${r.check_id}:${r.path}:${r.start?.line}`).digest('hex');
+        let cleanFile = r.path || 'unknown';
+        if (cleanFile.startsWith(sourcePath)) {
+          cleanFile = cleanFile.slice(sourcePath.length).replace(/^[/\\]+/, '');
+        }
+
+        const line = r.start?.line || 1;
+        const fingerprint = crypto.createHash('sha256').update(`SEMGREP:${r.check_id}:${cleanFile}:${line}`).digest('hex');
+
         return {
           engine: this.name,
           ruleId: r.check_id,
           severity: this.mapSeverity(r.extra?.severity),
           title: r.extra?.message?.split('.')[0] || r.check_id,
-          description: r.extra?.message,
-          filePath: r.path,
-          startLine: r.start?.line,
-          evidence: r.extra?.lines,
-          fingerprint
+          description: r.extra?.message || `Semgrep rule ${r.check_id} triggered.`,
+          filePath: cleanFile,
+          startLine: line,
+          evidence: r.extra?.lines || undefined,
+          fingerprint,
         };
       });
     } catch (e) {
+      console.warn('[SemgrepAdapter] Failed to parse output:', e);
       return [];
     }
   }
@@ -51,36 +89,9 @@ export class SemgrepAdapter implements ScannerAdapter {
   private mapSeverity(raw: string): NormalizedFinding['severity'] {
     if (!raw) return 'MEDIUM';
     const s = raw.toUpperCase();
-    if (s === 'ERROR') return 'HIGH';
+    if (s === 'ERROR' || s === 'CRITICAL') return 'HIGH';
     if (s === 'WARNING') return 'MEDIUM';
     if (s === 'INFO') return 'LOW';
     return 'MEDIUM';
-  }
-
-  private simulateFindings(): NormalizedFinding[] {
-    return [
-      {
-        engine: this.name,
-        ruleId: 'javascript.express.security.injection.tainted-sql-string',
-        severity: 'HIGH',
-        title: 'Potential SQL Injection',
-        description: 'Untrusted input concatenated directly into a SQL query.',
-        filePath: 'src/controllers/userController.js',
-        startLine: 42,
-        evidence: 'const query = "SELECT * FROM users WHERE id = " + req.query.id;',
-        fingerprint: crypto.createHash('sha256').update(`SEMGREP:sql-inject:src/controllers/userController.js:42`).digest('hex')
-      },
-      {
-        engine: this.name,
-        ruleId: 'javascript.react.security.audit.react-dangerouslysetinnerhtml',
-        severity: 'MEDIUM',
-        title: 'Dangerous HTML Injection',
-        description: 'Using dangerouslySetInnerHTML can lead to XSS vulnerabilities.',
-        filePath: 'src/components/UserProfile.tsx',
-        startLine: 18,
-        evidence: '<div dangerouslySetInnerHTML={{ __html: userBio }} />',
-        fingerprint: crypto.createHash('sha256').update(`SEMGREP:xss:src/components/UserProfile.tsx:18`).digest('hex')
-      }
-    ];
   }
 }

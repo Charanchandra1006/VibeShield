@@ -4,26 +4,29 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+          "bg-primary text-primary-ink hover:bg-primary-hover shadow-none",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+          "bg-destructive text-primary-ink hover:bg-destructive/90 shadow-none",
         outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+          "border border-hairline bg-shell text-ink hover:bg-wash shadow-none",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-wash text-ink hover:bg-wash/80 border border-hairline shadow-none",
+        ghost:
+          "text-ink hover:bg-wash shadow-none",
+        link:
+          "text-primary underline-offset-4 hover:underline p-0 h-auto",
       },
       size: {
-        default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        default: "h-[36px] px-4 py-2",
+        sm: "h-[32px] rounded-md px-3 text-xs",
+        lg: "h-[40px] rounded-md px-6 text-base",
+        icon: "h-[36px] w-[36px]",
+        "icon-sm": "h-[28px] w-[28px]",
       },
     },
     defaultVariants: {
@@ -41,7 +44,6 @@ export interface ButtonProps
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
-    // If we were using actual Radix, we'd use Slot. We'll fallback to button if @radix-ui/react-slot is missing.
     const Comp = asChild ? Slot : "button"
     return (
       <Comp

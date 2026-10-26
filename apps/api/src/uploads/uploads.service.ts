@@ -1,11 +1,11 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
+import { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
 import { PrismaService } from '../prisma/prisma.service.js';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
-export class UploadsService {
+export class UploadsService implements OnModuleInit {
   private s3Client: S3Client;
   private bucketName = process.env.S3_BUCKET_NAME || 'vibeshield-uploads';
 
@@ -21,7 +21,25 @@ export class UploadsService {
     });
   }
 
+  async onModuleInit() {
+    await this.ensureBucketExists();
+  }
+
+  async ensureBucketExists() {
+    try {
+      await this.s3Client.send(new HeadBucketCommand({ Bucket: this.bucketName }));
+    } catch {
+      try {
+        await this.s3Client.send(new CreateBucketCommand({ Bucket: this.bucketName }));
+        console.log(`[UploadsService] Created S3 bucket: ${this.bucketName}`);
+      } catch (err) {
+        console.warn(`[UploadsService] Could not auto-create bucket ${this.bucketName}:`, (err as Error)?.message);
+      }
+    }
+  }
+
   async uploadSnapshot(projectId: string, fileBuffer: Buffer, sizeBytes: number) {
+    await this.ensureBucketExists();
     const contentHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
     const storageKey = `snapshots/${projectId}/${uuidv4()}.zip`;
 

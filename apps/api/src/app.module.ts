@@ -8,6 +8,8 @@ import { ProjectsModule } from './projects/projects.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
 import { ScansModule } from './scans/scans.module.js';
 import { AIModule } from './ai/ai.module.js';
+import { FindingsModule } from './findings/findings.module.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 import { BullModule } from '@nestjs/bullmq';
 
 @Module({
@@ -19,6 +21,8 @@ import { BullModule } from '@nestjs/bullmq';
     UploadsModule,
     ScansModule,
     AIModule,
+    FindingsModule,
+    DashboardModule,
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_HOST || 'localhost',

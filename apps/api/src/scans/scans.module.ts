@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ScansController } from './scans.controller.js';
+import { ScanDetailController } from './scan-detail.controller.js';
 import { ScansService } from './scans.service.js';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from '../prisma/prisma.module.js';
@@ -15,7 +16,7 @@ import { AuthModule } from '../auth/auth.module.js';
       name: 'scan-jobs',
     })
   ],
-  controllers: [ScansController],
+  controllers: [ScansController, ScanDetailController],
   providers: [ScansService],
 })
 export class ScansModule {}

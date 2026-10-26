@@ -1,187 +1,445 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Github, UploadCloud, CheckCircle2, ArrowRight } from "lucide-react";
+import { Github, UploadCloud, CheckCircle2, ArrowRight, Sparkles, FileArchive, AlertCircle, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function NewProjectPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [step, setStep] = useState(1);
-  const [sourceType, setSourceType] = useState<"GITHUB" | "ZIP" | null>(null);
+  const [sourceType, setSourceType] = useState<"ZIP" | "SAMPLE" | "GITHUB">("ZIP");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [projectName, setProjectName] = useState("");
+  const [framework, setFramework] = useState("Node.js / Express");
+  const [profile, setProfile] = useState("Comprehensive");
+  const [githubUrl, setGithubUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [projectName, setProjectName] = useState('vibeshield-demo-app');
 
-  const handleNext = async () => {
-    if (step < 3) {
-      setStep(step + 1);
-    } else {
-      setLoading(true);
-      try {
-        setError(null);
-        // Create project
-        const projRes = await apiFetch('/projects', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: projectName,
-            sourceType,
-            framework: 'Next.js'
-          })
-        });
-
-        // Upload a placeholder zip
-        const formData = new FormData();
-        formData.append('file', new Blob(['mock-zip-content'], { type: 'application/zip' }), 'source.zip');
-        await apiFetch(`/projects/${projRes.data.id}/uploads`, {
-          method: 'POST',
-          body: formData,
-        });
-
-        // Start scan
-        await apiFetch(`/projects/${projRes.data.id}/scans`, {
-          method: 'POST',
-          body: JSON.stringify({ profile: 'Comprehensive' })
-        });
-
-        router.push(`/projects`);
-      } catch (e: any) {
-        console.error(e);
-        setError(e.message || 'Something went wrong. Is the API running on port 3001?');
-      } finally {
-        setLoading(false);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!file.name.endsWith('.zip')) {
+        setError('Please select a valid .zip archive file.');
+        return;
+      }
+      setSelectedFile(file);
+      setError(null);
+      const baseName = file.name.replace(/\.zip$/i, '').toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+      if (!projectName) {
+        setProjectName(baseName);
       }
     }
   };
 
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (!file.name.endsWith('.zip')) {
+        setError('Please drop a valid .zip archive.');
+        return;
+      }
+      setSelectedFile(file);
+      setError(null);
+      const baseName = file.name.replace(/\.zip$/i, '').toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+      if (!projectName) {
+        setProjectName(baseName);
+      }
+    }
+  };
+
+  const handleNext = async () => {
+    if (step === 1) {
+      if (sourceType === 'ZIP' && !selectedFile) {
+        setError('Please upload a .zip archive before continuing.');
+        return;
+      }
+      if (sourceType === 'SAMPLE') {
+        setProjectName('vulnerable-web-app-sample');
+      }
+      setError(null);
+      setStep(2);
+      return;
+    }
+
+    if (step === 2) {
+      if (!projectName.trim()) {
+        setError('Please enter a project name.');
+        return;
+      }
+      setError(null);
+      setStep(3);
+      return;
+    }
+
+    // Step 3: Execute creation & scan launch
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (sourceType === 'SAMPLE') {
+        const sampleRes = await apiFetch('/projects/sample', { method: 'POST' });
+        const projectId = sampleRes.data.project.id;
+
+        await apiFetch(`/projects/${projectId}/scans`, {
+          method: 'POST',
+          body: JSON.stringify({ profile }),
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['projects'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        router.push(`/projects/${projectId}/findings`);
+        return;
+      }
+
+      // Real ZIP upload flow
+      const projRes = await apiFetch('/projects', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: projectName,
+          sourceType: 'ZIP',
+          framework,
+        }),
+      });
+
+      const projectId = projRes.data.id;
+
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile, selectedFile.name);
+        await apiFetch(`/projects/${projectId}/uploads`, {
+          method: 'POST',
+          body: formData,
+        });
+      }
+
+      await apiFetch(`/projects/${projectId}/scans`, {
+        method: 'POST',
+        body: JSON.stringify({ profile }),
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      router.push(`/projects/${projectId}/findings`);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to start project scan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="max-w-3xl mx-auto space-y-8 mt-8">
-      {error && (
-        <div className="bg-destructive/10 border border-destructive text-destructive rounded-lg px-4 py-3 text-sm">
-          ⚠️ {error}
-        </div>
-      )}
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Onboard New Project</h1>
-        <p className="text-muted-foreground">Select your source code to begin security analysis.</p>
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="border-b border-hairline pb-4">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">Initialize Project</h1>
+        <p className="text-xs font-mono text-ink-muted mt-1">
+          Stage source code for vulnerability scanning across SAST, SCA, and secrets.
+        </p>
       </div>
 
-      <div className="flex items-center justify-center gap-4 mb-8">
-        {[1, 2, 3].map((s) => (
-          <div key={s} className="flex items-center gap-4">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${step >= s ? 'bg-primary text-primary-foreground shadow-[0_0_15px_rgba(124,58,237,0.5)]' : 'bg-muted text-muted-foreground'}`}>
-              {step > s ? <CheckCircle2 className="w-5 h-5" /> : s}
-            </div>
-            {s !== 3 && <div className={`w-16 h-px ${step > s ? 'bg-primary' : 'bg-border'}`} />}
+      {error && (
+        <div className="bg-destructive/10 border border-destructive text-destructive rounded-md p-3 text-xs font-mono flex items-center gap-2.5">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>fatal: {error}</span>
+        </div>
+      )}
+
+      {/* Progress Stepper with Git Rail */}
+      <div className="flex items-center justify-between font-mono text-xs border border-hairline rounded-lg p-3 bg-surface">
+        {[
+          { num: 1, label: "source.stage" },
+          { num: 2, label: "config.profile" },
+          { num: 3, label: "commit.scan" },
+        ].map((s, idx) => (
+          <div key={s.num} className="flex items-center gap-2">
+            <span
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                step === s.num
+                  ? "bg-primary text-primary-ink"
+                  : step > s.num
+                  ? "bg-lane-1 text-white"
+                  : "bg-wash text-ink-muted border border-hairline"
+              }`}
+            >
+              {step > s.num ? "✓" : s.num}
+            </span>
+            <span className={step >= s.num ? "text-ink font-semibold" : "text-ink-muted"}>
+              {s.label}
+            </span>
+            {idx < 2 && <span className="text-rail mx-2 hidden sm:inline">---</span>}
           </div>
         ))}
       </div>
 
-      <motion.div
-        key={step}
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <Card className="glass border-border">
-          {step === 1 && (
-            <>
-              <CardHeader>
-                <CardTitle>Select Input Source</CardTitle>
-                <CardDescription>How would you like to import your code?</CardDescription>
-              </CardHeader>
-              <CardContent className="grid sm:grid-cols-2 gap-4">
-                <button
-                  onClick={() => setSourceType("GITHUB")}
-                  className={`flex flex-col items-center justify-center p-8 border-2 rounded-xl transition-all ${sourceType === "GITHUB" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 bg-background/50"}`}
-                >
-                  <Github className={`w-12 h-12 mb-4 ${sourceType === "GITHUB" ? "text-primary" : "text-muted-foreground"}`} />
-                  <h3 className="font-semibold">Import from GitHub</h3>
-                  <p className="text-sm text-muted-foreground mt-2 text-center">Connect your repository directly</p>
-                </button>
-                <button
-                  onClick={() => setSourceType("ZIP")}
-                  className={`flex flex-col items-center justify-center p-8 border-2 rounded-xl transition-all ${sourceType === "ZIP" ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 bg-background/50"}`}
-                >
-                  <UploadCloud className={`w-12 h-12 mb-4 ${sourceType === "ZIP" ? "text-primary" : "text-muted-foreground"}`} />
-                  <h3 className="font-semibold">Upload ZIP Archive</h3>
-                  <p className="text-sm text-muted-foreground mt-2 text-center">Manually upload source code</p>
-                </button>
-              </CardContent>
-            </>
-          )}
+      {/* Main Surface Card */}
+      <div className="border border-hairline rounded-lg bg-surface">
+        {/* STEP 1: SELECT SOURCE */}
+        {step === 1 && (
+          <div className="p-6 space-y-6">
+            <div>
+              <h2 className="text-base font-semibold text-ink">1. Select Codebase Source</h2>
+              <p className="text-xs font-mono text-ink-muted">Choose source archive or sample repository</p>
+            </div>
 
-          {step === 2 && (
-            <>
-              <CardHeader>
-                <CardTitle>Configure Project</CardTitle>
-                <CardDescription>We detected your framework. Please confirm details.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Project Name</label>
-                  <Input value={projectName} onChange={e => setProjectName(e.target.value)} className="bg-background/50" />
+            <div className="grid sm:grid-cols-3 gap-3">
+              {/* Option A: ZIP Upload */}
+              <button
+                type="button"
+                onClick={() => setSourceType("ZIP")}
+                className={`p-4 rounded-md border text-left transition-colors cursor-pointer ${
+                  sourceType === "ZIP"
+                    ? "border-primary bg-primary-soft"
+                    : "border-hairline bg-shell hover:bg-wash"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <UploadCloud className={`w-5 h-5 ${sourceType === "ZIP" ? "text-primary" : "text-ink-muted"}`} />
+                  <span className={`w-2 h-2 rounded-full ${sourceType === "ZIP" ? "bg-primary" : "bg-rail"}`} />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Detected Framework</label>
-                  <div className="p-3 bg-muted/30 border border-border rounded-lg text-sm flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    Next.js (React)
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Scan Profile</label>
-                  <select className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                    <option>Comprehensive (SAST, SCA, Secrets, Config)</option>
-                    <option>Fast Check (Secrets only)</option>
-                  </select>
-                </div>
-              </CardContent>
-            </>
-          )}
+                <div className="font-semibold text-sm text-ink">ZIP Archive</div>
+                <div className="text-xs text-ink-muted mt-1 font-mono">upload local folder</div>
+              </button>
 
-          {step === 3 && (
-            <>
-              <CardHeader>
-                <CardTitle>Review & Start Scan</CardTitle>
-                <CardDescription>Review your setup before orchestrating the scan pipeline.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="p-4 rounded-lg bg-muted/20 border border-border space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Source</span>
-                    <span className="font-medium">ZIP Archive (4.2 MB)</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Engines</span>
-                    <span className="font-medium">Semgrep, Gitleaks, OSV-Scanner</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Privacy</span>
-                    <span className="font-medium">Private (Your Workspace Only)</span>
-                  </div>
+              {/* Option B: Sample Vulnerable Project */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSourceType("SAMPLE");
+                  setSelectedFile(null);
+                  setProjectName("vulnerable-web-app-sample");
+                }}
+                className={`p-4 rounded-md border text-left transition-colors cursor-pointer relative ${
+                  sourceType === "SAMPLE"
+                    ? "border-primary bg-primary-soft"
+                    : "border-hairline bg-shell hover:bg-wash"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <Sparkles className={`w-5 h-5 ${sourceType === "SAMPLE" ? "text-primary" : "text-ink-muted"}`} />
+                  <span className={`w-2 h-2 rounded-full ${sourceType === "SAMPLE" ? "bg-primary" : "bg-rail"}`} />
                 </div>
-                <p className="text-xs text-muted-foreground text-center">
-                  By starting the scan, you confirm you are authorized to analyze this source code.
+                <div className="font-semibold text-sm text-ink">Sample App</div>
+                <div className="text-xs text-ink-muted mt-1 font-mono">1-click test suite</div>
+              </button>
+
+              {/* Option C: GitHub */}
+              <button
+                type="button"
+                onClick={() => setSourceType("GITHUB")}
+                className={`p-4 rounded-md border text-left transition-colors cursor-pointer ${
+                  sourceType === "GITHUB"
+                    ? "border-primary bg-primary-soft"
+                    : "border-hairline bg-shell hover:bg-wash"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <Github className={`w-5 h-5 ${sourceType === "GITHUB" ? "text-primary" : "text-ink-muted"}`} />
+                  <span className={`w-2 h-2 rounded-full ${sourceType === "GITHUB" ? "bg-primary" : "bg-rail"}`} />
+                </div>
+                <div className="font-semibold text-sm text-ink">Git URL</div>
+                <div className="text-xs text-ink-muted mt-1 font-mono">clone repository</div>
+              </button>
+            </div>
+
+            {/* ZIP Drag & Drop Box */}
+            {sourceType === "ZIP" && (
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-rail hover:border-primary rounded-md p-8 text-center cursor-pointer transition-colors bg-shell/50 space-y-2"
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".zip,application/zip"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                {selectedFile ? (
+                  <div className="space-y-1 font-mono text-xs">
+                    <div className="w-10 h-10 rounded-full bg-lane-1/10 text-lane-1 flex items-center justify-center mx-auto mb-2">
+                      <FileArchive className="w-5 h-5" />
+                    </div>
+                    <p className="font-semibold text-sm text-ink">{selectedFile.name}</p>
+                    <p className="text-ink-muted">
+                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • staged
+                    </p>
+                    <div className="pt-2">
+                      <Button variant="outline" size="sm" className="text-xs font-mono">
+                        change archive
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <UploadCloud className="w-8 h-8 mx-auto text-ink-muted" />
+                    <p className="text-sm font-semibold text-ink">Drop .zip archive here or click to browse</p>
+                    <p className="text-xs text-ink-muted font-mono">supports archives up to 50MB</p>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Sample App Explanation */}
+            {sourceType === "SAMPLE" && (
+              <div className="p-4 rounded-md bg-wash border border-hairline font-mono text-xs space-y-2 text-ink">
+                <div className="font-semibold text-primary flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" /> vulnerable-web-app-sample
+                </div>
+                <p className="text-ink-muted leading-relaxed font-sans text-xs">
+                  Includes real vulnerabilities: hardcoded API secrets (detected by Gitleaks), raw SQL string concatenations (detected by Semgrep), vulnerable JSON packages (detected by OSV-Scanner), and open CORS (detected by Config Engine).
                 </p>
-              </CardContent>
-            </>
-          )}
+              </div>
+            )}
 
-          <CardFooter className="flex justify-between border-t border-border pt-6">
-            <Button variant="ghost" onClick={() => setStep(step - 1)} disabled={step === 1 || loading}>
-              Back
-            </Button>
-            <Button onClick={handleNext} disabled={(step === 1 && !sourceType) || loading} className="gap-2">
-              {loading ? "Starting..." : step === 3 ? "Start Security Scan" : "Continue"} <ArrowRight className="w-4 h-4" />
-            </Button>
-          </CardFooter>
-        </Card>
-      </motion.div>
+            {/* GitHub URL */}
+            {sourceType === "GITHUB" && (
+              <div className="space-y-2">
+                <label className="text-xs font-mono text-ink-muted uppercase">Repository URL</label>
+                <Input
+                  placeholder="https://github.com/owner/repository"
+                  value={githubUrl}
+                  onChange={(e) => {
+                    setGithubUrl(e.target.value);
+                    const parts = e.target.value.split('/');
+                    const repo = parts[parts.length - 1];
+                    if (repo && !projectName) setProjectName(repo);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* STEP 2: CONFIGURE DETAILS */}
+        {step === 2 && (
+          <div className="p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-ink">2. Configure Scan Profile</h2>
+              <p className="text-xs font-mono text-ink-muted">Verify repository label and engines to invoke</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-mono text-ink-muted uppercase">Project Identifier</label>
+              <Input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="my-service-backend"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-mono text-ink-muted uppercase">Framework Environment</label>
+              <select
+                value={framework}
+                onChange={(e) => setFramework(e.target.value)}
+                className="flex h-[36px] w-full rounded-md border border-rail bg-surface px-3 py-1.5 text-xs font-mono text-ink focus:border-primary outline-none"
+              >
+                <option value="Next.js">Next.js (React)</option>
+                <option value="Node.js / Express">Node.js / Express</option>
+                <option value="React">React SPA</option>
+                <option value="Python / FastAPI">Python / FastAPI / Django</option>
+                <option value="Go">Go / Golang</option>
+                <option value="General Repository">General Codebase</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-mono text-ink-muted uppercase">Scan Engine Profile</label>
+              <select
+                value={profile}
+                onChange={(e) => setProfile(e.target.value)}
+                className="flex h-[36px] w-full rounded-md border border-rail bg-surface px-3 py-1.5 text-xs font-mono text-ink focus:border-primary outline-none"
+              >
+                <option value="Comprehensive">Comprehensive (Semgrep + Gitleaks + OSV + Config)</option>
+                <option value="Fast Check (Secrets only)">Fast Check (Gitleaks Secrets only)</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: REVIEW & LAUNCH */}
+        {step === 3 && (
+          <div className="p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-semibold text-ink">3. Review & Execute Scan</h2>
+              <p className="text-xs font-mono text-ink-muted">Ready to dispatch job to BullMQ worker queue</p>
+            </div>
+
+            <div className="p-4 rounded-md bg-wash border border-hairline font-mono text-xs space-y-2.5">
+              <div className="flex justify-between">
+                <span className="text-ink-muted">project:</span>
+                <span className="text-ink font-semibold">{projectName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">source:</span>
+                <span className="text-ink font-semibold">
+                  {sourceType === "SAMPLE"
+                    ? "vulnerable-web-app-sample"
+                    : selectedFile
+                    ? `${selectedFile.name}`
+                    : githubUrl || "ZIP archive"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">framework:</span>
+                <span className="text-ink font-semibold">{framework}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-muted">engines:</span>
+                <span className="text-primary font-semibold">
+                  {profile.includes("Secrets") ? "Gitleaks" : "Semgrep, Gitleaks, OSV-Scanner, Config"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Action Controls */}
+        <div className="px-6 py-4 border-t border-hairline flex items-center justify-between bg-wash/30">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setStep(step - 1)}
+            disabled={step === 1 || loading}
+            className="text-xs font-mono"
+          >
+            &lt; back
+          </Button>
+
+          <Button
+            size="sm"
+            onClick={handleNext}
+            disabled={loading}
+            className="gap-2 text-xs font-mono"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> dispatching job...
+              </>
+            ) : step === 3 ? (
+              <>
+                git commit scan <ArrowRight className="w-3.5 h-3.5" />
+              </>
+            ) : (
+              <>
+                continue &gt;
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

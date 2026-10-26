@@ -86,4 +86,26 @@ export class ScansService {
       orderBy: { createdAt: 'desc' }
     });
   }
+
+  async getScanById(scanId: string, workspaceId: string) {
+    const scan = await this.prisma.scan.findUnique({
+      where: { id: scanId },
+      include: {
+        executions: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            workspaceId: true,
+          },
+        },
+      },
+    });
+
+    if (!scan || scan.project.workspaceId !== workspaceId) {
+      throw new NotFoundException('Scan not found');
+    }
+
+    return scan;
+  }
 }

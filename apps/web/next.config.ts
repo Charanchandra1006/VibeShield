@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   // Disabled cacheComponents for MVP stability: the app uses useParams/usePathname
   // in client components which requires Suspense boundaries under PPR. Our pages
   // already use Suspense, but disabling avoids further prerender edge-cases.
+  experimental: {
+    agentUpgrade: "security",
+  },
 };
 
 export default nextConfig;
